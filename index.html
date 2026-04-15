@@ -1526,10 +1526,20 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     return null;
   }
 
-  function makeHorizonItem(name, type, folderId) {
+  function makeChunk(label) {
+    return {
+      id: genId('chunk'),
+      text: label,
+      completed: false,
+      date: ''
+    };
+  }
+
+  function makeHorizonItem(name, type, folderId, chunks) {
     return {
       id: makeId('hz_'), type, name,
-      dueDate: '', triggerDate: '', chunks: [],
+      dueDate: '', triggerDate: '',
+      chunks: chunks || [],
       completed: false, repeat: '', pulseFreq: 'medium',
       needsCarryForward: false, lastCompletedAt: null,
       folderId: folderId || '',
@@ -1540,12 +1550,11 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   }
 
   function pushAsLaunch(nodeId) {
-    // Single task — no children pulled in regardless
+    // Single task only — no children
     const node = flatNodes.find(n => n.id === nodeId);
     if (!node) return;
     const { horizon, folders } = getFEData();
-    const task = makeHorizonItem(node.label, 'task', '');
-    saveFEData([...horizon, task], folders);
+    saveFEData([...horizon, makeHorizonItem(node.label, 'task', '')], folders);
     setPushFeedback('Launched to Focus Engine');
     setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 1800);
   }
@@ -1557,28 +1566,25 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     const { horizon, folders } = getFEData();
     const children = treeNode.children || [];
     const colour = displayNode.colour || '#6B4FBB';
-    const note = `From Blueprint: ${blueprint.title}`;
 
     if (type === 'task') {
-      // Single task, no children
+      // Single task, no children pulled in
       saveFEData([...horizon, makeHorizonItem(treeNode.label, 'task', '')], folders);
       setPushFeedback('Added as Task in Horizon');
 
     } else if (type === 'project') {
-      // Node becomes a project; its children become tasks inside it
-      const projectItem = makeHorizonItem(treeNode.label, 'project', '');
-      const newItems = [projectItem];
-      children.forEach(child => {
-        newItems.push(makeHorizonItem(child.label, 'task', projectItem.id));
-      });
-      saveFEData([...horizon, ...newItems], folders);
+      // Node = project; children = chunks (sub-tasks) on that project
+      const chunks = children.map(c => makeChunk(c.label));
+      const project = makeHorizonItem(treeNode.label, 'project', '', chunks);
+      saveFEData([...horizon, project], folders);
       const childCount = children.length;
       setPushFeedback(childCount > 0
-        ? `Project + ${childCount} task${childCount > 1 ? 's' : ''} added to Horizon`
+        ? `Project + ${childCount} sub-task${childCount > 1 ? 's' : ''} added`
         : 'Added as Project in Horizon');
 
     } else if (type === 'folder') {
-      // Node becomes a folder; its children become projects; grandchildren become tasks
+      // Node = folder
+      // Children = projects inside that folder, each with grandchildren as their chunks
       const folder = {
         id: makeId('folder_'),
         name: treeNode.label,
@@ -1586,20 +1592,17 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
         collapsed: false,
         sortOrder: folders.length
       };
-      const newItems = [];
-      children.forEach(child => {
-        const project = makeHorizonItem(child.label, 'project', folder.id);
-        newItems.push(project);
-        (child.children || []).forEach(gc => {
-          newItems.push(makeHorizonItem(gc.label, 'task', project.id));
-        });
+      const newItems = children.map(child => {
+        const chunks = (child.children || []).map(gc => makeChunk(gc.label));
+        return makeHorizonItem(child.label, 'project', folder.id, chunks);
       });
       saveFEData([...horizon, ...newItems], [...folders, folder]);
       const projectCount = children.length;
       const taskCount = children.reduce((s, c) => s + (c.children || []).length, 0);
-      let msg = 'Folder added to Horizon';
-      if (projectCount > 0) msg = `Folder + ${projectCount} project${projectCount > 1 ? 's' : ''}`;
-      if (taskCount > 0) msg += ` + ${taskCount} task${taskCount > 1 ? 's' : ''}`;
+      let msg = projectCount > 0
+        ? `Folder + ${projectCount} project${projectCount > 1 ? 's' : ''}`
+        : 'Folder added to Horizon';
+      if (taskCount > 0) msg += ` + ${taskCount} sub-task${taskCount > 1 ? 's' : ''}`;
       setPushFeedback(msg);
     }
 
