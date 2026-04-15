@@ -1,0 +1,2896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blueprint — Performance Lab by TAPL</title>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0D0A1A;
+  --surface: #13102A;
+  --card: #1A1635;
+  --border: #2D2558;
+  --purple: #2D1B69;
+  --purple-mid: #3D2B89;
+  --purple-light: #6B4FBB;
+  --accent: #E8453C;
+  --teal: #0BBFBF;
+  --gold: #F0B429;
+  --text: #F0EEF8;
+  --text-mid: #9B93BB;
+  --text-dim: #635A80;
+  --text-faint: #3D3560;
+  --glow: rgba(107, 79, 187, 0.15);
+}
+
+[data-theme="light"] {
+  --bg: #F4F2FF;
+  --surface: #ECEAF8;
+  --card: #FFFFFF;
+  --border: #D4D0EE;
+  --purple: #2D1B69;
+  --purple-mid: #3D2B89;
+  --purple-light: #6B4FBB;
+  --accent: #E8453C;
+  --teal: #0891B2;
+  --gold: #D97706;
+  --text: #1A1035;
+  --text-mid: #4A3F70;
+  --text-dim: #7B70A0;
+  --text-faint: #B0A8CC;
+  --glow: rgba(107, 79, 187, 0.08);
+}
+
+body {
+  font-family: 'Montserrat', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* Ambient background */
+body::before {
+  content: '';
+  position: fixed;
+  top: -30%;
+  left: -20%;
+  width: 70%;
+  height: 70%;
+  background: radial-gradient(ellipse, rgba(45,27,105,0.25) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -20%;
+  right: -10%;
+  width: 50%;
+  height: 60%;
+  background: radial-gradient(ellipse, rgba(11,191,191,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root { position: relative; z-index: 1; }
+
+/* Header */
+.header {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 60px;
+  background: rgba(13,10,26,0.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  z-index: 100;
+}
+
+.header-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, var(--purple-light), var(--teal));
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 900;
+  color: white;
+  letter-spacing: -1px;
+}
+
+.header-title {
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text);
+}
+
+.header-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+
+.header-user {
+  font-size: 11px;
+  color: var(--text-mid);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+/* Auth screen */
+.auth-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px 24px;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px 40px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.auth-icon {
+  width: 56px;
+  height: 56px;
+  background: linear-gradient(135deg, var(--purple), var(--purple-mid));
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 28px;
+  box-shadow: 0 8px 24px rgba(45,27,105,0.4);
+}
+
+.auth-heading {
+  font-family: 'DM Serif Display', serif;
+  font-size: 28px;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+
+.auth-sub {
+  font-size: 13px;
+  color: var(--text-mid);
+  line-height: 1.6;
+  margin-bottom: 32px;
+  font-weight: 500;
+}
+
+.input-label {
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.input-field {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  margin-bottom: 16px;
+}
+
+.input-field:focus {
+  border-color: var(--purple-light);
+  box-shadow: 0 0 0 3px rgba(107,79,187,0.15);
+}
+
+.input-field::placeholder { color: var(--text-faint); font-weight: 500; }
+
+/* OTP grid */
+.otp-grid {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.otp-cell {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 0;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--text);
+  text-align: center;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  width: 100%;
+}
+
+.otp-cell:focus {
+  border-color: var(--purple-light);
+  box-shadow: 0 0 0 3px rgba(107,79,187,0.15);
+}
+
+.btn-primary {
+  width: 100%;
+  background: linear-gradient(135deg, var(--purple), var(--purple-mid));
+  color: white;
+  border: none;
+  border-radius: 10px;
+  padding: 15px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+  box-shadow: 0 4px 16px rgba(45,27,105,0.4);
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(45,27,105,0.5);
+}
+
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+.btn-secondary {
+  width: 100%;
+  background: transparent;
+  color: var(--text-mid);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 13px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color 0.2s, color 0.2s;
+  margin-top: 10px;
+}
+
+.btn-secondary:hover { border-color: var(--purple-light); color: var(--text); }
+
+.auth-message {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.auth-message.error {
+  background: rgba(232,69,60,0.1);
+  border: 1px solid rgba(232,69,60,0.3);
+  color: #FF6B6B;
+}
+
+.auth-message.info {
+  background: rgba(107,79,187,0.1);
+  border: 1px solid rgba(107,79,187,0.3);
+  color: var(--purple-light);
+}
+
+.auth-message.success {
+  background: rgba(34,197,94,0.1);
+  border: 1px solid rgba(34,197,94,0.3);
+  color: #4ADE80;
+}
+
+/* Main app */
+.app-shell {
+  min-height: 100vh;
+  padding-top: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px;
+  max-width: 480px;
+  width: 100%;
+  margin: 24px;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.4);
+}
+
+.status-icon {
+  font-size: 40px;
+  margin-bottom: 20px;
+}
+
+.status-heading {
+  font-family: 'DM Serif Display', serif;
+  font-size: 24px;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+.status-body {
+  font-size: 13px;
+  color: var(--text-mid);
+  line-height: 1.7;
+  font-weight: 500;
+}
+
+.status-detail {
+  margin-top: 20px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  font-family: monospace;
+  text-align: left;
+  word-break: break-all;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border);
+  border-top-color: var(--purple-light);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 20px;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.dot-pulse {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dot-pulse span {
+  width: 6px;
+  height: 6px;
+  background: var(--purple-light);
+  border-radius: 50%;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.dot-pulse span:nth-child(2) { animation-delay: 0.2s; }
+.dot-pulse span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 80%, 100% { opacity: 0.2; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-up { animation: fadeUp 0.4s ease-out forwards; }
+
+/* ── Clarification sequence ── */
+.clarify-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px 24px;
+}
+.clarify-card {
+  width: 100%;
+  max-width: 560px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 48px 44px;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+.clarify-progress { display: flex; gap: 6px; margin-bottom: 36px; }
+.clarify-pip { flex: 1; height: 3px; border-radius: 2px; background: var(--border); transition: background 0.4s ease; }
+.clarify-pip.active { background: var(--purple-light); }
+.clarify-pip.done { background: var(--teal); }
+.clarify-step-label { font-size: 10px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px; }
+.clarify-question { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--text); line-height: 1.4; margin-bottom: 8px; }
+.clarify-hint { font-size: 12px; color: var(--text-dim); font-weight: 500; line-height: 1.6; margin-bottom: 28px; }
+.clarify-textarea {
+  width: 100%; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px;
+  font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 600;
+  color: var(--text); outline: none; resize: none; min-height: 100px;
+  line-height: 1.6; transition: border-color 0.2s, box-shadow 0.2s; margin-bottom: 20px;
+}
+.clarify-textarea:focus { border-color: var(--purple-light); box-shadow: 0 0 0 3px rgba(107,79,187,0.15); }
+.clarify-textarea::placeholder { color: var(--text-faint); font-weight: 500; }
+.clarify-nav { display: flex; gap: 10px; align-items: center; }
+.btn-back {
+  background: transparent; color: var(--text-dim); border: 1px solid var(--border);
+  border-radius: 10px; padding: 13px 18px;
+  font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer;
+  transition: border-color 0.2s, color 0.2s; white-space: nowrap;
+}
+.btn-back:hover { border-color: var(--purple-light); color: var(--text); }
+.prev-answers { margin-bottom: 24px; border-left: 2px solid var(--border); padding-left: 16px; }
+.prev-answer-item { margin-bottom: 12px; }
+.prev-answer-q { font-size: 10px; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 3px; }
+.prev-answer-a { font-size: 13px; color: var(--text-mid); font-weight: 500; line-height: 1.5; }
+.summary-screen { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 80px 24px 24px; }
+.summary-card { width: 100%; max-width: 560px; background: var(--card); border: 1px solid var(--border); border-radius: 20px; padding: 48px 44px; box-shadow: 0 24px 80px rgba(0,0,0,0.4); }
+.summary-label { font-size: 10px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--teal); margin-bottom: 16px; }
+.summary-answer-item { padding: 14px 0; border-bottom: 1px solid var(--border); }
+.summary-answer-item:last-child { border-bottom: none; }
+.summary-answer-q { font-size: 10px; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 6px; }
+.summary-answer-a { font-size: 14px; color: var(--text); font-weight: 600; line-height: 1.5; }
+.summary-title-wrap { background: linear-gradient(135deg, rgba(45,27,105,0.3), rgba(11,191,191,0.1)); border: 1px solid var(--purple-light); border-radius: 12px; padding: 20px; margin-bottom: 28px; }
+.summary-title-label { font-size: 10px; font-weight: 900; letter-spacing: 2px; text-transform: uppercase; color: var(--purple-light); margin-bottom: 8px; }
+.summary-title-text { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--text); line-height: 1.4; }
+#confetti-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 9999; }
+.dashboard-screen { min-height: 100vh; padding: 80px 24px 40px; max-width: 720px; margin: 0 auto; }
+.dashboard-heading { font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--text); margin-bottom: 8px; margin-top: 32px; }
+.dashboard-sub { font-size: 13px; color: var(--text-mid); font-weight: 500; margin-bottom: 32px; }
+.btn-new-blueprint {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: linear-gradient(135deg, var(--purple), var(--purple-mid));
+  color: white; border: none; border-radius: 12px; padding: 14px 24px;
+  font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 900;
+  letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+  transition: opacity 0.2s, transform 0.15s;
+  box-shadow: 0 4px 16px rgba(45,27,105,0.4); margin-bottom: 40px;
+}
+.btn-new-blueprint:hover { opacity: 0.9; transform: translateY(-1px); }
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text-dim); }
+.empty-state-icon { font-size: 36px; margin-bottom: 16px; opacity: 0.4; }
+.empty-state-text { font-size: 14px; font-weight: 600; line-height: 1.6; }
+
+/* ── Map view ── */
+.map-screen { position: fixed; top: 60px; left: 0; right: 0; bottom: 0; overflow: hidden; background: var(--bg); }
+.map-canvas { width: 100%; height: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
+.map-back-btn {
+  position: absolute; top: 16px; left: 16px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 16px; font-family: 'Montserrat', sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase;
+  color: var(--text-mid); cursor: pointer; transition: border-color 0.2s, color 0.2s;
+  z-index: 10; display: flex; align-items: center; gap: 8px;
+}
+.map-back-btn:hover { border-color: var(--purple-light); color: var(--text); }
+@keyframes mapZoomIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+.map-zoom-in { animation: mapZoomIn 0.4s cubic-bezier(0.34,1.1,0.64,1) forwards; }
+@keyframes nodeRadialIn { from { opacity:0; } to { opacity:1; } }
+.domain-detail {
+  position: absolute; top: 60px; left: 50%; transform: translateX(-50%);
+  width: 90%; max-width: 640px; background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 32px; box-shadow: 0 24px 80px rgba(0,0,0,0.5);
+  z-index: 5; animation: detailSlideIn 0.25s cubic-bezier(0.34,1.28,0.64,1) forwards;
+  max-height: calc(100vh - 160px); overflow-y: auto;
+}
+@keyframes detailSlideIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0)    scale(1); }
+}
+@keyframes whyPanelIn {
+  from { opacity: 0; transform: translate(-50%,-50%) scale(0.92); }
+  to   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
+}
+@keyframes actionFadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.action-item { animation: actionFadeIn 0.2s ease-out forwards; }
+.domain-detail-header { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; }
+.domain-colour-dot { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+.domain-detail-title { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--text); }
+.action-list { margin-bottom: 20px; }
+.action-item {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; margin-bottom: 8px; transition: border-color 0.2s;
+}
+.action-item:hover { border-color: var(--purple-light); box-shadow: inset 3px 0 0 var(--purple-light); }
+.action-check {
+  width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--border);
+  cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.action-check.done { background: var(--teal); border-color: var(--teal); }
+.action-text { font-size: 13px; font-weight: 600; color: var(--text); flex: 1; line-height: 1.4; }
+.action-text.done { text-decoration: line-through; color: var(--text-dim); }
+.action-freq { font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-faint); white-space: nowrap; }
+.add-action-row { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.add-action-input {
+  flex: 1; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 11px 14px; font-family: 'Montserrat', sans-serif;
+  font-size: 13px; font-weight: 600; color: var(--text); outline: none; transition: border-color 0.2s;
+}
+.add-action-input:focus { border-color: var(--purple-light); }
+.add-action-input::placeholder { color: var(--text-faint); font-weight: 500; }
+.btn-add-small {
+  background: var(--purple); color: white; border: none; border-radius: 10px;
+  padding: 11px 16px; font-family: 'Montserrat', sans-serif; font-size: 11px;
+  font-weight: 900; letter-spacing: 1px; cursor: pointer; transition: opacity 0.2s; white-space: nowrap;
+}
+.btn-add-small:hover:not(:disabled) { opacity: 0.85; }
+.btn-add-small:disabled { opacity: 0.3; cursor: not-allowed; }
+.add-domain-panel {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center; z-index: 10;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 14px; padding: 12px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+.add-domain-input {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px 14px; font-family: 'Montserrat', sans-serif; font-size: 13px;
+  font-weight: 600; color: var(--text); outline: none; width: 200px; transition: border-color 0.2s;
+}
+.add-domain-input:focus { border-color: var(--purple-light); }
+.add-domain-input::placeholder { color: var(--text-faint); font-weight: 500; }
+.map-hint { position: absolute; top: 16px; right: 16px; font-size: 11px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.5px; z-index: 10; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script>
+// ── Auth0 config ─────────────────────────────────────────────
+const AUTH0_DOMAIN = "dev-e3lizbd6wrf6z3ah.us.auth0.com";
+const AUTH0_CLIENT_ID = "Ij2mZP5IXGBFSC8THKHnKLbWWWExDonI";
+
+// ── Firebase config ──────────────────────────────────────────
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCncj_CNUVsKKI1wd9jH3ch0wG4F9XT1D8",
+  authDomain: "tapl---focus-engine.firebaseapp.com",
+  databaseURL: "https://tapl---focus-engine-default-rtdb.firebaseio.com/",
+  projectId: "tapl---focus-engine",
+  storageBucket: "tapl---focus-engine.appspot.com",
+  messagingSenderId: "841836399984",
+  appId: "1:841836399984:web:focusengine"
+};
+
+// ── Cloud keys ───────────────────────────────────────────────
+const CLOUD_KEYS = [
+  'tapl-tasks', 'tapl-blocks', 'tapl-session-start', 'tapl-session-end',
+  'tapl-horizon', 'tapl-hz-folders', 'tapl-completed-tasks',
+  'tapl-skipped-tasks', 'tapl-theme',
+  'tapl-blueprint-maps', 'tapl-blueprint-theme'
+];
+
+// ── Helpers ──────────────────────────────────────────────────
+async function hashEmail(email) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(email.toLowerCase().trim()));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('').slice(0,32);
+}
+
+function ls(key, fallback) {
+  try { const r = localStorage.getItem(key); return r ? JSON.parse(r) : fallback; } catch { return fallback; }
+}
+
+function lsSet(key, val) {
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch {}
+}
+
+// ── Firebase loader — deferred until first use ────────────────
+let firebaseDb = null;
+function loadFirebaseScripts() {
+  return new Promise((resolve, reject) => {
+    if (firebaseDb) { resolve(); return; }
+    let loaded = 0;
+    function onLoad() {
+      loaded++;
+      if (loaded === 2) {
+        try {
+          const app = firebase.initializeApp(FIREBASE_CONFIG);
+          firebaseDb = firebase.database(app);
+          resolve();
+        } catch(e) { reject(e); }
+      }
+    }
+    const s1 = document.createElement('script');
+    s1.src = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js';
+    s1.onload = onLoad; s1.onerror = reject;
+    const s2 = document.createElement('script');
+    s2.src = 'https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js';
+    s2.onload = onLoad; s2.onerror = reject;
+    document.head.appendChild(s1);
+    document.head.appendChild(s2);
+  });
+}
+</script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Auth0 OTP helpers ────────────────────────────────────────
+async function requestOTP(email) {
+  const res = await fetch(`https://${AUTH0_DOMAIN}/passwordless/start`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      client_id: AUTH0_CLIENT_ID,
+      connection: 'email',
+      email,
+      send: 'code'
+    })
+  });
+  if (!res.ok) { const e = await res.json(); throw new Error(e.error_description || 'Failed to send code'); }
+  return true;
+}
+
+async function verifyOTP(email, otp) {
+  const res = await fetch(`https://${AUTH0_DOMAIN}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      grant_type: 'http://auth0.com/oauth/grant-type/passwordless/otp',
+      client_id: AUTH0_CLIENT_ID,
+      username: email,
+      otp,
+      realm: 'email',
+      scope: 'openid email profile'
+    })
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error_description || 'Invalid code');
+  return data;
+}
+
+// ── Firebase sync ─────────────────────────────────────────────
+async function loadFromFirebase(userPath) {
+  await loadFirebaseScripts();
+  const snap = await firebaseDb.ref(userPath + '/data').get();
+  const cloudData = snap.exists() ? snap.val() : null;
+  if (cloudData) {
+    CLOUD_KEYS.forEach(k => {
+      if (cloudData[k] !== undefined) localStorage.setItem(k, JSON.stringify(cloudData[k]));
+    });
+  }
+  return cloudData;
+}
+
+async function saveToFirebase(userPath) {
+  await loadFirebaseScripts();
+  const payload = {};
+  CLOUD_KEYS.forEach(k => {
+    const raw = localStorage.getItem(k);
+    if (raw !== null) { try { payload[k] = JSON.parse(raw); } catch(e) {} }
+  });
+  await firebaseDb.ref(userPath + '/data').set(payload);
+}
+
+// ── OTP Input component ───────────────────────────────────────
+function OTPInput({ onComplete }) {
+  const [vals, setVals] = useState(['','','','','','']);
+  const refs = [useRef(),useRef(),useRef(),useRef(),useRef(),useRef()];
+
+  const handleChange = (i, v) => {
+    const cleaned = v.replace(/\D/g,'').slice(-1);
+    const next = [...vals];
+    next[i] = cleaned;
+    setVals(next);
+    if (cleaned && i < 5) refs[i+1].current.focus();
+    if (next.every(c => c !== '')) onComplete(next.join(''));
+  };
+
+  const handleKeyDown = (i, e) => {
+    if (e.key === 'Backspace' && !vals[i] && i > 0) refs[i-1].current.focus();
+  };
+
+  const handlePaste = (e) => {
+    const text = e.clipboardData.getData('text').replace(/\D/g,'').slice(0,6);
+    if (text.length === 6) {
+      const next = text.split('');
+      setVals(next);
+      refs[5].current.focus();
+      onComplete(text);
+    }
+    e.preventDefault();
+  };
+
+  return (
+    <div className="otp-grid">
+      {vals.map((v, i) => (
+        <input
+          key={i}
+          ref={refs[i]}
+          className="otp-cell"
+          type="text"
+          inputMode="numeric"
+          maxLength={1}
+          value={v}
+          onChange={e => handleChange(i, e.target.value)}
+          onKeyDown={e => handleKeyDown(i, e)}
+          onPaste={handlePaste}
+          autoFocus={i === 0}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Auth screen ───────────────────────────────────────────────
+function AuthScreen({ onAuth }) {
+  const [email, setEmail] = useState('');
+  const [stage, setStage] = useState('email'); // email | otp
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  const handleSendCode = async () => {
+    if (!email.includes('@')) { setMessage({ type: 'error', text: 'Enter a valid email address.' }); return; }
+    setLoading(true); setMessage(null);
+    try {
+      await requestOTP(email);
+      setStage('otp');
+      setMessage({ type: 'info', text: `Code sent to ${email}` });
+    } catch(e) {
+      setMessage({ type: 'error', text: e.message });
+    } finally { setLoading(false); }
+  };
+
+  const handleVerify = async (otp) => {
+    setLoading(true); setMessage(null);
+    try {
+      await verifyOTP(email, otp);
+      window.__taplUserEmail = email;
+      setMessage({ type: 'success', text: 'Verified. Loading your Blueprint...' });
+      setTimeout(() => onAuth(email), 800);
+    } catch(e) {
+      setMessage({ type: 'error', text: 'That code didn\'t work. Check it and try again.' });
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-screen">
+      <div className="auth-card fade-up">
+        <div className="auth-icon">◆</div>
+        {stage === 'email' ? (
+          <>
+            <h1 className="auth-heading">Blueprint</h1>
+            <p className="auth-sub">Map your goals. Build the architecture. Connect the work that matters.</p>
+            {message && <div className={`auth-message ${message.type}`}>{message.text}</div>}
+            <label className="input-label">Email address</label>
+            <input
+              className="input-field"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSendCode()}
+              autoFocus
+            />
+            <button className="btn-primary" onClick={handleSendCode} disabled={loading || !email}>
+              {loading ? 'Sending...' : 'Send access code'}
+            </button>
+          </>
+        ) : (
+          <>
+            <h1 className="auth-heading">Check your email</h1>
+            <p className="auth-sub">Enter the six-digit code sent to <strong style={{color:'var(--text)'}}>{email}</strong></p>
+            {message && <div className={`auth-message ${message.type}`}>{message.text}</div>}
+            <OTPInput onComplete={handleVerify} />
+            {loading && <div style={{textAlign:'center',marginBottom:16}}><div className="dot-pulse"><span/><span/><span/></div></div>}
+            <button className="btn-secondary" onClick={() => { setStage('email'); setMessage(null); }} disabled={loading}>
+              Use a different email
+            </button>
+          </>
+        )}
+        <p style={{textAlign:'center',fontSize:10,color:'var(--text-faint)',marginTop:20,fontWeight:600,letterSpacing:'0.5px'}}>
+          PERFORMANCE LAB BY TAPL
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Confetti ──────────────────────────────────────────────────
+function fireConfetti(duration = 2500) {
+  const canvas = document.getElementById('confetti-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const colours = ['#6B4FBB','#0BBFBF','#E8453C','#F0B429','#FFFFFF','#9B8FCC'];
+  const pieces = Array.from({length: 90}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * -canvas.height * 0.5,
+    w: Math.random() * 10 + 5,
+    h: Math.random() * 5 + 3,
+    colour: colours[Math.floor(Math.random() * colours.length)],
+    rot: Math.random() * Math.PI * 2,
+    vx: (Math.random() - 0.5) * 3,
+    vy: Math.random() * 3 + 2,
+    vr: (Math.random() - 0.5) * 0.15
+  }));
+  const start = Date.now();
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const elapsed = Date.now() - start;
+    if (elapsed > duration) { ctx.clearRect(0, 0, canvas.width, canvas.height); return; }
+    pieces.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = p.colour;
+      ctx.globalAlpha = Math.max(0, 1 - elapsed / duration);
+      ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+// ── Clarification questions ───────────────────────────────────
+const CLARIFY_QUESTIONS = [
+  {
+    q: "What is the goal?",
+    hint: "State it in one sentence. Specific, professional, time-bound if possible.",
+    placeholder: "e.g. Build a profitable coaching business within 12 months"
+  },
+  {
+    q: "Why are you motivated to achieve this?",
+    hint: "What is driving you toward this right now? Be direct.",
+    placeholder: "e.g. I'm tired of trading time for money and want to build something that scales"
+  },
+  {
+    q: "What does achieving it give you?",
+    hint: "Think in terms of capability, freedom, wellbeing, status, impact, or security.",
+    placeholder: "e.g. Financial independence and the credibility to work with senior clients"
+  },
+  {
+    q: "And why does that matter to you?",
+    hint: "Go one level deeper. This is where the real motivation lives.",
+    placeholder: "e.g. Because I've spent years building other people's businesses — it's time to build my own"
+  },
+  {
+    q: "When you get there, what will you know about yourself?",
+    hint: "One sentence. What will you know to be true about yourself?",
+    placeholder: "e.g. That I can back myself and deliver without someone else's structure holding me up"
+  }
+];
+
+// ── Clarification sequence component ─────────────────────────
+function ClarificationSequence({ onComplete, onSkip }) {
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState(['','','','','']);
+  const [current, setCurrent] = useState('');
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    setCurrent(answers[step] || '');
+    setTimeout(() => textareaRef.current && textareaRef.current.focus(), 100);
+  }, [step]);
+
+  const handleNext = () => {
+    const updated = [...answers];
+    updated[step] = current.trim();
+    setAnswers(updated);
+    if (step < 4) {
+      setStep(step + 1);
+    } else {
+      onComplete(updated);
+    }
+  };
+
+  const handleBack = () => {
+    const updated = [...answers];
+    updated[step] = current.trim();
+    setAnswers(updated);
+    setStep(step - 1);
+  };
+
+  const q = CLARIFY_QUESTIONS[step];
+
+  return (
+    <div className="clarify-screen">
+      <div className="clarify-card fade-up">
+        <div className="clarify-progress">
+          {CLARIFY_QUESTIONS.map((_, i) => (
+            <div key={i} className={`clarify-pip ${i < step ? 'done' : i === step ? 'active' : ''}`}/>
+          ))}
+        </div>
+
+        {step > 0 && (
+          <div className="prev-answers">
+            {answers.slice(0, step).map((a, i) => a && (
+              <div key={i} className="prev-answer-item">
+                <div className="prev-answer-q">{CLARIFY_QUESTIONS[i].q}</div>
+                <div className="prev-answer-a">{a}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="clarify-step-label">Step {step + 1} of 5</div>
+        <div className="clarify-question">{q.q}</div>
+        <div className="clarify-hint">{q.hint}</div>
+
+        <textarea
+          ref={textareaRef}
+          className="clarify-textarea"
+          placeholder={q.placeholder}
+          value={current}
+          onChange={e => setCurrent(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && current.trim()) handleNext(); }}
+        />
+
+        <div className="clarify-nav">
+          {step > 0 && (
+            <button className="btn-back" onClick={handleBack}>Back</button>
+          )}
+          <button
+            className="btn-primary"
+            style={{flex: 1}}
+            onClick={handleNext}
+            disabled={!current.trim()}
+          >
+            {step < 4 ? 'Continue' : 'Build my Blueprint'}
+          </button>
+          {step === 0 && (
+            <span className="clarify-skip" onClick={onSkip}>Skip</span>
+          )}
+        </div>
+        <p style={{textAlign:'center',fontSize:10,color:'var(--text-faint)',marginTop:20,fontWeight:600,letterSpacing:'0.5px'}}>
+          Cmd+Enter to continue
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ── Summary / confirmation screen ────────────────────────────
+function SummaryScreen({ answers, onConfirm, onEdit }) {
+  const title = answers[0];
+  const shortQs = ["Your goal","Why you're motivated","What it gives you","Why that matters","What you'll know about yourself"];
+
+  return (
+    <div className="summary-screen">
+      <div className="summary-card fade-up">
+        <div className="summary-label">Your Blueprint</div>
+
+        <div className="summary-title-wrap">
+          <div className="summary-title-label">Central goal</div>
+          <div className="summary-title-text">{title}</div>
+        </div>
+
+        <div style={{marginBottom: 28}}>
+          {answers.slice(1,5).map((a, i) => (
+            <div key={i} className="summary-answer-item">
+              <div className="summary-answer-q">{shortQs[i+1]}</div>
+              <div className="summary-answer-a">{a}</div>
+            </div>
+          ))}
+        </div>
+
+        <button className="btn-primary" style={{marginBottom: 10}} onClick={onConfirm}>
+          That's right — build it
+        </button>
+        <button className="btn-secondary" onClick={onEdit}>
+          Edit my answers
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+
+// ── Domain colours ────────────────────────────────────────────
+const DOMAIN_COLOURS = [
+  '#6B4FBB','#0BBFBF','#E8453C','#F0B429',
+  '#22C55E','#EC4899','#F97316','#3B82F6',
+  '#A855F7','#14B8A6','#F43F5E','#84CC16'
+];
+
+function genId(prefix) {
+  return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+}
+
+// Returns a colour string for a given depth, derived from the root domain colour
+// Depth 0: full colour (border + stroke, vibrant)
+// Depth 1: mixed ~30% toward dark bg — still clearly related
+// Depth 2: mixed ~55% toward dark bg
+// Depth 3+: mixed ~70% toward dark bg
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return [r, g, b];
+}
+function mixColour(hex, depth) {
+  if (depth === 0) return hex;
+  const bg = [13, 10, 26]; // --bg dark
+  const [r, g, b] = hexToRgb(hex);
+  // Mix toward a mid-purple rather than pure black — preserves hue family while clearly stepping down
+  const mid = [45, 38, 80]; // mid-purple reference point
+  const factors = [0, 0.52, 0.72, 0.83, 0.90];
+  const t = factors[Math.min(depth, factors.length - 1)];
+  const mr = Math.round(r + (mid[0] - r) * t);
+  const mg = Math.round(g + (mid[1] - g) * t);
+  const mb = Math.round(b + (mid[2] - b) * t);
+  return `rgb(${mr},${mg},${mb})`;
+}
+
+// ── Tree node structure ───────────────────────────────────────
+// Each node: { id, label, done, children[], colour(root only) }
+// Blueprint: { id, title, clarificationAnswers, nodes[], createdAt, updatedAt }
+
+function migrateBlueprint(bp) {
+  // If already has nodes[], it's already migrated
+  if (bp.nodes) return bp;
+  // Migrate from old domains/actions structure
+  const nodes = (bp.domains || []).map((d, di) => ({
+    id: d.id || genId('n'),
+    label: d.name || 'Domain',
+    done: false,
+    colour: DOMAIN_COLOURS[di % DOMAIN_COLOURS.length],
+    children: (d.actions || []).map(a => ({
+      id: a.id || genId('n'),
+      label: a.text || '',
+      done: a.done || false,
+      children: []
+    }))
+  }));
+  return { ...bp, nodes, domains: undefined };
+}
+
+// ── Tree helpers ──────────────────────────────────────────────
+function updateNodeInTree(nodes, targetId, updater) {
+  return nodes.map(n => {
+    if (n.id === targetId) return updater(n);
+    if (n.children && n.children.length)
+      return { ...n, children: updateNodeInTree(n.children, targetId, updater) };
+    return n;
+  });
+}
+
+function deleteNodeInTree(nodes, targetId) {
+  return nodes
+    .filter(n => n.id !== targetId)
+    .map(n => n.children && n.children.length
+      ? { ...n, children: deleteNodeInTree(n.children, targetId) }
+      : n
+    );
+}
+
+function addChildToNode(nodes, parentId, child) {
+  return nodes.map(n => {
+    if (n.id === parentId) return { ...n, children: [...(n.children || []), child] };
+    if (n.children && n.children.length)
+      return { ...n, children: addChildToNode(n.children, parentId, child) };
+    return n;
+  });
+}
+
+function countDescendants(node) {
+  if (!node.children || !node.children.length) return 0;
+  return node.children.length + node.children.reduce((s, c) => s + countDescendants(c), 0);
+}
+
+function countDone(node) {
+  const self = node.done ? 1 : 0;
+  if (!node.children || !node.children.length) return self;
+  return self + node.children.reduce((s, c) => s + countDone(c), 0);
+}
+
+// Returns 0-1 completion ratio for a node, recursively from leaf nodes up
+function nodeProgress(node) {
+  if (!node.children || node.children.length === 0) {
+    return node.done ? 1 : 0;
+  }
+  const total = node.children.length;
+  const sum = node.children.reduce((s, c) => s + nodeProgress(c), 0);
+  return sum / total;
+}
+
+// Does this node have any descendants (direct or indirect)?
+function hasAnyChildren(node) {
+  return node.children && node.children.length > 0;
+}
+
+// ── Canvas map ────────────────────────────────────────────────
+function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
+  const canvasRef = React.useRef(null);
+  const [dims, setDims] = React.useState({ w: 800, h: 600 });
+  const [transform, setTransform] = React.useState({ x: 0, y: 0, scale: 1 });
+  const [ready, setReady] = React.useState(false);
+  const [animPhase, setAnimPhase] = React.useState(0); // 0=hidden,1=expanding,2=settled
+  const [expandedId, setExpandedId] = React.useState(null);
+  const [editMode, setEditMode] = React.useState(false);
+  const [addingTo, setAddingTo] = React.useState(null); // nodeId we're adding child to
+  const [newLabel, setNewLabel] = React.useState('');
+  const [pushStage, setPushStage] = React.useState(null); // null | 'choice' | 'horizon'
+  const [pushNodeId, setPushNodeId] = React.useState(null);
+  const [pushFeedback, setPushFeedback] = React.useState(null);
+  const [addingRoot, setAddingRoot] = React.useState(false);
+  const [rootLabel, setRootLabel] = React.useState('');
+  const [showWhy, setShowWhy] = React.useState(false);
+  const [editingField, setEditingField] = React.useState(null);
+  const [editingValue, setEditingValue] = React.useState('');
+  const [renamingId, setRenamingId] = React.useState(null);
+  const [renameValue, setRenameValue] = React.useState('');
+  const [renamingRoot, setRenamingRoot] = React.useState(false);
+  const [renameRootValue, setRenameRootValue] = React.useState('');
+  const [holdTimer, setHoldTimer] = React.useState(null);
+  const [holdNodeId, setHoldNodeId] = React.useState(null);
+  const [holdProgress, setHoldProgress] = React.useState(0);
+  const holdInterval = React.useRef(null);
+  const pointerDownTime = React.useRef(0);
+  const pointerDownNodeId = React.useRef(null);
+  const addingToActive = React.useRef(false);
+  const addingRootActive = React.useRef(false);
+  const rootDownTime = React.useRef(0);
+  const rootHoldFired = React.useRef(false);
+  const rootDelayTimer = React.useRef(null);
+  const isPanning = React.useRef(false);
+  const panStart = React.useRef({ x: 0, y: 0, tx: 0, ty: 0 });
+  const didPan = React.useRef(false);
+
+  const nodes = blueprint.nodes || [];
+
+  React.useEffect(() => {
+    function measure() {
+      if (canvasRef.current) {
+        const r = canvasRef.current.getBoundingClientRect();
+        setDims({ w: r.width, h: r.height });
+      }
+    }
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
+
+  // Register wheel as non-passive so we can preventDefault on pinch
+  React.useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const onWheel = (e) => { e.preventDefault(); };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Entry animation sequence
+  React.useEffect(() => {
+    if (dims.w < 100) return;
+    const t1 = setTimeout(() => setAnimPhase(1), 80);
+    const t2 = setTimeout(() => setAnimPhase(2), 900);
+    setReady(true);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [dims.w]);
+
+  // Zoom on scroll/pinch — cursor-centred, gradual
+  function handleWheel(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const isPinch = e.ctrlKey || e.metaKey;
+    let factor;
+    if (isPinch) {
+      const clamped = Math.max(-5, Math.min(5, e.deltaY));
+      factor = 1 - clamped * 0.012;
+    } else {
+      factor = e.deltaY > 0 ? 0.96 : 1.04;
+    }
+    // Cursor position relative to the canvas element
+    const rect = canvasRef.current ? canvasRef.current.getBoundingClientRect() : { left: 0, top: 0 };
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    setTransform(t => {
+      const newScale = Math.max(0.25, Math.min(4, t.scale * factor));
+      const actualFactor = newScale / t.scale;
+      return {
+        scale: newScale,
+        x: mx - (mx - t.x) * actualFactor,
+        y: my - (my - t.y) * actualFactor,
+      };
+    });
+  }
+
+  // Pan
+  function handleMouseDown(e) {
+    if (e.button !== 0) return;
+    pointerDownTime.current = Date.now(); // always record time, even for background clicks
+    isPanning.current = true;
+    didPan.current = false;
+    panStart.current = { x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y };
+  }
+
+  function handleMouseMove(e) {
+    if (!isPanning.current) return;
+    const dx = e.clientX - panStart.current.x;
+    const dy = e.clientY - panStart.current.y;
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) didPan.current = true;
+    setTransform(t => ({ ...t, x: panStart.current.tx + dx, y: panStart.current.ty + dy }));
+  }
+
+  function handleMouseUp() { isPanning.current = false; }
+
+  // Node layout — recursive radial positioning
+  // parentCx/parentCy = the origin point children fan AWAY from
+  function layoutNodes(nodeList, cx, cy, orbitRadius, startAngle, angleSpan, depth, parentCx, parentCy) {
+    const pCx = parentCx !== undefined ? parentCx : cx;
+    const pCy = parentCy !== undefined ? parentCy : cy;
+    return nodeList.map((node, i) => {
+      const angle = nodeList.length === 1
+        ? startAngle
+        : startAngle + (i / (nodeList.length - 1) - 0.5) * angleSpan;
+      const x = cx + Math.cos(angle) * orbitRadius;
+      const y = cy + Math.sin(angle) * orbitRadius;
+      // childAngle = direction FROM parent centre TOWARD this node (away from origin)
+      const childAngle = Math.atan2(y - pCy, x - pCx);
+      const childCount = (node.children || []).length;
+      const childRadius = Math.max(60, orbitRadius * 0.68);
+      const childSpan = Math.min(Math.PI * 0.6, Math.PI * 0.18 * Math.max(1, childCount));
+      return {
+        ...node,
+        x, y, angle, depth,
+        colour: node.colour || (depth === 0 ? DOMAIN_COLOURS[i % DOMAIN_COLOURS.length] : null),
+        children: layoutNodes(
+          node.children || [],
+          x, y, childRadius, childAngle, childSpan, depth + 1,
+          pCx, pCy  // pass original centre so all descendants fan away from map centre
+        )
+      };
+    });
+  }
+
+  // Flatten laid-out tree for rendering
+  function flattenTree(layouted, parentId = null, rootColour = null, depth = 0) {
+    let out = [];
+    for (const n of layouted) {
+      const baseCol = n.colour || rootColour; // root domain colour
+      const displayCol = mixColour(baseCol, depth); // depth-adjusted colour
+      out.push({ ...n, colour: baseCol, displayColour: displayCol, depth, parentId, children: undefined });
+      if (n.children && n.children.length)
+        out = out.concat(flattenTree(n.children, n.id, baseCol, depth + 1));
+    }
+    return out;
+  }
+
+  function flattenEdges(layouted, parentNode = null, rootColour = null, depth = 0) {
+    let edges = [];
+    for (const n of layouted) {
+      const baseCol = n.colour || rootColour;
+      const edgeCol = mixColour(baseCol, depth);
+      if (parentNode) edges.push({ x1: parentNode.x, y1: parentNode.y, x2: n.x, y2: n.y, col: edgeCol, depth });
+      if (n.children && n.children.length)
+        edges = edges.concat(flattenEdges(n.children, n, baseCol, depth + 1));
+    }
+    return edges;
+  }
+
+  const cx = dims.w / 2;
+  const cy = dims.h / 2;
+  // Larger base orbit so nodes have breathing room before repulsion
+  const rootOrbit = Math.min(dims.w, dims.h) * 0.34;
+  const fullSpan = Math.PI * 2;
+  const rootStartAngle = nodes.length === 1 ? 0 : -Math.PI / 2;
+
+  const laid = layoutNodes(nodes, cx, cy, rootOrbit, rootStartAngle, fullSpan, 0, cx, cy);
+  let flatNodes = flattenTree(laid);
+  const flatEdges = flattenEdges(laid);
+
+  // ── Repulsion pass — push overlapping nodes apart ──────────
+  // Run multiple iterations until stable or max reached
+  // Each node has a radius; minimum gap between any two node edges = MIN_GAP
+  const MIN_GAP = 14; // px between circle edges
+  const MAX_ITER = 80;
+  const DAMPING = 0.5;
+
+  // Build a mutable positions map keyed by node id
+  const positions = {};
+  flatNodes.forEach(n => { positions[n.id] = { x: n.x, y: n.y }; });
+
+  for (let iter = 0; iter < MAX_ITER; iter++) {
+    let maxMove = 0;
+    for (let i = 0; i < flatNodes.length; i++) {
+      for (let j = i + 1; j < flatNodes.length; j++) {
+        const a = flatNodes[i];
+        const b = flatNodes[j];
+        const pa = positions[a.id];
+        const pb = positions[b.id];
+        const rA = nodeRadius(a.label, a.depth);
+        const rB = nodeRadius(b.label, b.depth);
+        const minDist = rA + rB + MIN_GAP;
+        const dx = pb.x - pa.x;
+        const dy = pb.y - pa.y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
+        if (dist < minDist) {
+          const overlap = (minDist - dist) * DAMPING;
+          const nx = dx / dist;
+          const ny = dy / dist;
+          // Push both nodes apart equally, but anchor depth-0 nodes more strongly
+          // (children move more, parents move less)
+          const wA = a.depth === 0 ? 0.3 : 0.5;
+          const wB = b.depth === 0 ? 0.3 : 0.5;
+          pa.x -= nx * overlap * wA;
+          pa.y -= ny * overlap * wA;
+          pb.x += nx * overlap * wB;
+          pb.y += ny * overlap * wB;
+          maxMove = Math.max(maxMove, overlap);
+        }
+      }
+    }
+    if (maxMove < 0.5) break; // converged
+  }
+
+  // Apply repulsed positions back to flatNodes
+  flatNodes = flatNodes.map(n => ({ ...n, x: positions[n.id].x, y: positions[n.id].y }));
+
+  // Central node radius from title
+  function measureTextW(text, fs, fw) { return text.length * fs * (fw >= 800 ? 0.62 : 0.56); }
+  const titleWords = (blueprint.title || '').toUpperCase().split(' ');
+  let tLine = '', tLines = [];
+  titleWords.forEach(w => {
+    const c = tLine ? tLine + ' ' + w : w;
+    if (c.length > 14) { if (tLine) tLines.push(tLine); tLine = w; } else tLine = c;
+  });
+  if (tLine) tLines.push(tLine);
+  tLines = tLines.slice(0, 3);
+  const longest = tLines.reduce((a, b) => a.length > b.length ? a : b, '');
+  const crByWidth = measureTextW(longest, 12, 900) / 2 + 22;
+  const crByHeight = (tLines.length * 18) / 2 + 22; // 18px line height per line
+  const CR = Math.max(50, Math.max(crByWidth, crByHeight));
+
+  // Node radius from label
+  function nodeRadius(label, depth) {
+    const fs = depth === 0 ? 10 : depth === 1 ? 8.5 : 7.5;
+    const fw = 800;
+    const upper = (label || '').toUpperCase();
+    // Use splitLabel to get the same lines as rendering
+    const lines = splitLabel(label);
+    const longestLine = lines.reduce((a, b) => a.length >= b.length ? a : b, '');
+    const textW = measureTextW(longestLine, fs, fw);
+    const pad = depth === 0 ? 18 : 12;
+    const minR = depth === 0 ? 38 : depth === 1 ? 24 : 18;
+    return Math.max(minR, textW / 2 + pad);
+  }
+
+  // Split label to lines for a given maxChars
+  function splitLabel(label) {
+    const upper = (label || '').toUpperCase();
+    const words = upper.split(' ');
+    // Single short word — no split needed
+    if (words.length === 1 && upper.length <= 11) return [upper];
+    // Multi-word — find most balanced split
+    if (words.length >= 2) {
+      let bestSplit = 1, bestDiff = Infinity;
+      for (let i = 1; i < words.length; i++) {
+        const l1 = words.slice(0, i).join(' ');
+        const l2 = words.slice(i).join(' ');
+        const diff = Math.abs(l1.length - l2.length);
+        if (diff < bestDiff) { bestDiff = diff; bestSplit = i; }
+      }
+      return [words.slice(0, bestSplit).join(' '), words.slice(bestSplit).join(' ')].slice(0, 2);
+    }
+    // Single long word — split at midpoint for balance
+    const mid = Math.ceil(upper.length / 2);
+    return [upper.slice(0, mid), upper.slice(mid)];
+  }
+
+  // Animation progress: phase 0 = all at centre, phase 2 = settled
+  function getNodePos(n) {
+    if (animPhase === 0) return { x: cx, y: cy, opacity: 0, r: 0 };
+    if (animPhase === 2) return { x: n.x, y: n.y, opacity: 1, r: nodeRadius(n.label, n.depth) };
+    // phase 1 = expanding
+    return { x: n.x, y: n.y, opacity: 0.7, r: nodeRadius(n.label, n.depth) };
+  }
+
+  // Hold-to-branch logic — purely time based, no race conditions
+  const HOLD_MS = 600; // ms to trigger branch mode
+
+  function startHold(nodeId) {
+    pointerDownTime.current = Date.now();
+    pointerDownNodeId.current = nodeId;
+    setHoldNodeId(nodeId);
+    setHoldProgress(0);
+    let prog = 0;
+    holdInterval.current = setInterval(() => {
+      const elapsed = Date.now() - pointerDownTime.current;
+      prog = Math.min(100, (elapsed / HOLD_MS) * 100);
+      setHoldProgress(prog);
+      if (prog >= 100) {
+        clearInterval(holdInterval.current);
+        holdInterval.current = null;
+        addingToActive.current = true;
+        setHoldNodeId(null);
+        setHoldProgress(0);
+        setAddingTo(nodeId);
+        setNewLabel('');
+      }
+    }, 16);
+  }
+
+  function cancelHold() {
+    if (holdInterval.current) {
+      clearInterval(holdInterval.current);
+      holdInterval.current = null;
+    }
+    setHoldNodeId(null);
+    setHoldProgress(0);
+  }
+
+  function handleNodePointerDown(e, nodeId) {
+    e.stopPropagation();
+    if (didPan.current) return;
+    startHold(nodeId);
+  }
+
+  async function handleNodePointerUp(e, node) {
+    e.stopPropagation();
+    // If branch input is already open, ignore
+    if (addingToActive.current) return;
+    const elapsed = Date.now() - pointerDownTime.current;
+    cancelHold();
+    if (elapsed >= HOLD_MS) return; // was a hold, not a click
+    if (didPan.current) return;
+    // Short press = click
+    if (node.depth === 0) {
+      // depth-0: expand/collapse if has children, otherwise toggle done
+      const hasKids = flatNodes.some(fn => fn.parentId === node.id);
+      if (hasKids) {
+        setExpandedId(prev => prev === node.id ? null : node.id);
+      } else {
+        const updated = { ...blueprint, nodes: updateNodeInTree(blueprint.nodes, node.id, n => ({ ...n, done: !n.done })), updatedAt: new Date().toISOString() };
+        await onUpdateBlueprint(updated);
+      }
+    } else {
+      // deeper nodes: only toggle if leaf (no children) — parents fill from children
+      const hasKids = flatNodes.some(fn => fn.parentId === node.id);
+      if (!hasKids) {
+        const updated = { ...blueprint, nodes: updateNodeInTree(blueprint.nodes, node.id, n => ({ ...n, done: !n.done })), updatedAt: new Date().toISOString() };
+        await onUpdateBlueprint(updated);
+      }
+      // If has children, clicking still expands — do nothing extra
+    }
+  }
+
+  // ── Push to Focus Engine helpers ──────────────────────────
+  function getFEData() {
+    try {
+      const horizon = JSON.parse(localStorage.getItem('tapl-horizon') || '[]');
+      const folders = JSON.parse(localStorage.getItem('tapl-hz-folders') || '[]');
+      return { horizon, folders };
+    } catch(e) { return { horizon: [], folders: [] }; }
+  }
+
+  function saveFEData(horizon, folders) {
+    localStorage.setItem('tapl-horizon', JSON.stringify(horizon));
+    localStorage.setItem('tapl-hz-folders', JSON.stringify(folders));
+    // Trigger Firebase save via the shared saveToFirebase — use userPath from props
+    // userPath is passed via blueprint prop — access via onUpdateBlueprint closure
+    // Simplest: dispatch a custom event that BlueprintApp listens to
+    window.dispatchEvent(new CustomEvent('tapl-fe-sync'));
+  }
+
+  function makeId(prefix) {
+    return prefix + Date.now() + (prefix === 'hz_' ? '_' + Math.random().toString(36).slice(2,7) : '');
+  }
+
+  function pushAsLaunch(nodeId) {
+    const node = flatNodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const { horizon, folders } = getFEData();
+    // Find a matching folder if one exists with the same name as a parent domain
+    const domain = flatNodes.find(n => n.depth === 0 && (n.id === nodeId || flatNodes.some(fn => fn.parentId === n.id && fn.id === nodeId)));
+    const matchFolder = folders.find(f => domain && f.name.toLowerCase().includes(domain.label.toLowerCase()));
+    const task = {
+      id: makeId('hz_'),
+      type: 'task',
+      name: node.label,
+      dueDate: '', triggerDate: '', chunks: [],
+      completed: false, repeat: '', pulseFreq: 'medium',
+      needsCarryForward: false, lastCompletedAt: null,
+      folderId: matchFolder ? matchFolder.id : '',
+      notes: `From Blueprint: ${blueprint.title}`,
+      createdAt: new Date().toISOString(),
+      lastReviewed: new Date().toISOString()
+    };
+    saveFEData([...horizon, task], folders);
+    setPushFeedback('Launched to Focus Engine');
+    setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 1800);
+  }
+
+  function pushAsHorizonItem(nodeId, type) {
+    const node = flatNodes.find(n => n.id === nodeId);
+    if (!node) return;
+    const { horizon, folders } = getFEData();
+
+    if (type === 'folder') {
+      const folder = {
+        id: makeId('folder_'),
+        name: node.label,
+        color: node.colour || '#6B4FBB',
+        collapsed: false,
+        sortOrder: folders.length
+      };
+      saveFEData(horizon, [...folders, folder]);
+      setPushFeedback('Added as Folder in Horizon');
+    } else {
+      const item = {
+        id: makeId('hz_'),
+        type,
+        name: node.label,
+        dueDate: '', triggerDate: '', chunks: [],
+        completed: false, repeat: '', pulseFreq: 'medium',
+        needsCarryForward: false, lastCompletedAt: null,
+        folderId: '',
+        notes: `From Blueprint: ${blueprint.title}`,
+        createdAt: new Date().toISOString(),
+        lastReviewed: new Date().toISOString()
+      };
+      saveFEData([...horizon, item], folders);
+      setPushFeedback(type === 'project' ? 'Added as Project in Horizon' : 'Added as Task in Horizon');
+    }
+    setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 1800);
+  }
+
+  async function handleAddChild() {
+    if (!newLabel.trim() || !addingTo) return;
+    const countChildren = (nodes, id) => {
+      for (const n of nodes) {
+        if (n.id === id) return (n.children || []).length;
+        if (n.children) { const r = countChildren(n.children, id); if (r !== -1) return r; }
+      }
+      return -1;
+    };
+    const count = countChildren(blueprint.nodes, addingTo);
+    if (count >= 20) return;
+    const child = { id: genId('n'), label: newLabel.trim(), done: false, children: [] };
+    const updated = { ...blueprint, nodes: addChildToNode(blueprint.nodes, addingTo, child), updatedAt: new Date().toISOString() };
+    await onUpdateBlueprint(updated);
+    setNewLabel('');
+    setAddingTo(null);
+    addingToActive.current = false;
+  }
+
+  async function handleRename() {
+    if (!renameValue.trim() || !renamingId) { setRenamingId(null); return; }
+    const updated = { ...blueprint, nodes: updateNodeInTree(blueprint.nodes, renamingId, n => ({ ...n, label: renameValue.trim() })), updatedAt: new Date().toISOString() };
+    await onUpdateBlueprint(updated);
+    setRenamingId(null);
+    setRenameValue('');
+  }
+
+  async function handleRenameRoot() {
+    if (!renameRootValue.trim()) { setRenamingRoot(false); return; }
+    const newBp = { ...blueprint, title: renameRootValue.trim(), updatedAt: new Date().toISOString() };
+    await onUpdateBlueprint(newBp);
+    setRenamingRoot(false);
+    setRenameRootValue('');
+  }
+
+  async function handleDeleteNode(e, nodeId) {
+    e.stopPropagation();
+    if (!window.confirm('Remove this node and all its children?')) return;
+    const updated = { ...blueprint, nodes: deleteNodeInTree(blueprint.nodes, nodeId), updatedAt: new Date().toISOString() };
+    await onUpdateBlueprint(updated);
+    if (expandedId === nodeId) setExpandedId(null);
+  }
+
+  async function handleAddRootNode(name) {
+    const newNode = {
+      id: genId('n'), label: name, done: false,
+      colour: DOMAIN_COLOURS[nodes.length % DOMAIN_COLOURS.length],
+      children: []
+    };
+    const updated = { ...blueprint, nodes: [...blueprint.nodes, newNode], updatedAt: new Date().toISOString() };
+    await onUpdateBlueprint(updated);
+  }
+
+  async function handleAddRoot() {
+    if (!rootLabel.trim()) { setAddingRoot(false); addingRootActive.current = false; return; }
+    await handleAddRootNode(rootLabel.trim());
+    setRootLabel('');
+    setAddingRoot(false);
+    addingRootActive.current = false;
+  }
+
+  // Transition style for nodes — expand from centre
+  const transBase = animPhase < 2
+    ? `all 0.6s cubic-bezier(0.34,1.05,0.64,1)`
+    : `opacity 0.3s ease`;
+
+  return (
+    <div
+      ref={canvasRef}
+      style={{ width:'100%', height:'100%', position:'relative', overflow:'hidden', cursor: isPanning.current ? 'grabbing' : 'grab' }}
+      onWheel={handleWheel}
+      onMouseDown={handleMouseDown}
+      onTouchStart={e => { if (e.touches.length === 2) e.preventDefault(); }}
+      onTouchMove={e => { if (e.touches.length === 2) e.preventDefault(); }}
+      onMouseMove={handleMouseMove}
+      onMouseUp={handleMouseUp}
+      onMouseLeave={handleMouseUp}
+    >
+      {/* Click-away overlay — sits behind SVG, catches background clicks */}
+      {(expandedId !== null || addingTo !== null || addingRoot || showWhy || renamingRoot) && (
+        <div
+          style={{ position:'absolute', inset:0, zIndex:1, cursor:'default' }}
+          onPointerDown={e => {
+            if (!didPan.current) {
+              setExpandedId(null);
+              setAddingTo(null);
+              setNewLabel('');
+              addingToActive.current = false;
+              setPushStage(null);
+              setPushNodeId(null);
+              setAddingRoot(false);
+              addingRootActive.current = false;
+              setRootLabel('');
+              setShowWhy(false);
+              setRenamingRoot(false);
+              setRenameRootValue('');
+            }
+          }}
+        />
+      )}
+      <svg
+        style={{ width:'100%', height:'100%', position:'absolute', top:0, left:0, touchAction:'none', zIndex:2, pointerEvents:'none' }}
+      >
+        <defs>
+          <style>{`@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@700;800;900&display=swap');`}</style>
+          <radialGradient id="cGrad" cx="35%" cy="35%" r="65%">
+            <stop offset="0%" stopColor="#1E1640"/>
+            <stop offset="60%" stopColor="#130F2E"/>
+            <stop offset="100%" stopColor="#0A0818"/>
+          </radialGradient>
+          <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+            <feDropShadow dx="0" dy="3" stdDeviation="7" floodOpacity="0.4"/>
+          </filter>
+          <filter id="centerGlow" x="-60%" y="-60%" width="220%" height="220%">
+            <feDropShadow dx="0" dy="6" stdDeviation="20" floodColor="#6B4FBB" floodOpacity="0.35"/>
+          </filter>
+        </defs>
+
+        <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`} style={{pointerEvents:'all'}}>
+
+          {/* Root edges — centre to depth-0 nodes */}
+          {flatNodes.filter(n => n.depth === 0).map(n => (
+            <line key={'root-e-'+n.id}
+              x1={cx} y1={cy} x2={n.x} y2={n.y}
+              stroke={n.displayColour || n.colour}
+              strokeWidth="1.8"
+              opacity={animPhase < 2 ? 0 : 0.35}
+              style={{ transition: animPhase < 2 ? 'opacity 0.5s ease 0.3s' : 'opacity 0.3s ease' }}
+            />
+          ))}
+          {/* Branch edges — parent to child */}
+          {flatEdges.map((e, i) => (
+            <line key={'e'+i}
+              x1={e.x1} y1={e.y1} x2={e.x2} y2={e.y2}
+              stroke={e.col}
+              strokeWidth={e.depth === 1 ? 1.3 : 0.9}
+              opacity={animPhase < 2 ? 0 : 0.28}
+              style={{ transition: animPhase < 2 ? 'opacity 0.5s ease 0.4s' : 'opacity 0.3s ease' }}
+            />
+          ))}
+
+          {/* Nodes — rendered back to front by depth */}
+          {flatNodes.sort((a,b) => a.depth - b.depth).map(n => {
+            const pos = getNodePos(n);
+            const R = nodeRadius(n.label, n.depth);
+            const labelLines = splitLabel(n.label);
+            const fs = n.depth === 0 ? 10 : n.depth === 1 ? 8.5 : 7.5;
+            const fw = n.depth === 0 ? 800 : 700;
+            const col = n.displayColour || n.colour;
+            const total = countDescendants(n) + (n.depth > 0 ? 1 : 0);
+            const done = n.depth > 0 ? (n.done ? 1 : 0) : countDone({...n, children: flatNodes.filter(fn => fn.parentId === n.id).map(fn => ({...fn, children:[]}))});
+            const isHolding = holdNodeId === n.id;
+            const holdCircumference = 2 * Math.PI * (R + 4);
+            const holdDash = holdCircumference * (holdProgress / 100);
+            const animDelay = animPhase === 1 ? `${n.depth * 0.08 + (flatNodes.indexOf(n) % (nodes.length || 1)) * 0.06}s` : '0s';
+
+            const tx = animPhase === 0 ? cx : n.x;
+            const ty = animPhase === 0 ? cy : n.y;
+            return (
+              <g key={n.id}
+                style={{
+                  cursor: 'pointer',
+                  opacity: animPhase === 0 ? 0 : 1,
+                  transform: `translate(${tx}px, ${ty}px)`,
+                  transformOrigin: '0px 0px',
+                  transition: animPhase === 0
+                    ? 'none'
+                    : animPhase === 1
+                    ? `opacity 0.4s ease ${animDelay}, transform 0.65s cubic-bezier(0.34,1.05,0.64,1) ${animDelay}`
+                    : 'opacity 0.3s ease, transform 0.3s ease'
+                }}
+                onPointerDown={e => handleNodePointerDown(e, n.id)}
+                onPointerUp={e => handleNodePointerUp(e, n)}
+                onPointerLeave={cancelHold}
+              >
+                {/* Outer glow ring */}
+                <circle cx={0} cy={0} r={R + 8}
+                  fill="none" stroke={col} strokeWidth="1"
+                  opacity={expandedId === n.id ? 0.25 : 0.08}
+                  style={{ transition: 'all 0.3s ease' }}
+                />
+                {/* Main body — fill driven by child completion if has children */}
+                {(() => {
+                  const directChildren = flatNodes.filter(fn => fn.parentId === n.id);
+                  const hasKids = directChildren.length > 0;
+                  const findInTree = (nodes, id) => {
+                    for (const nd of nodes) {
+                      if (nd.id === id) return nd;
+                      if (nd.children) { const r = findInTree(nd.children, id); if (r) return r; }
+                    }
+                    return null;
+                  };
+                  const treeNode = findInTree(blueprint.nodes, n.id);
+                  const prog = treeNode ? nodeProgress(treeNode) : (n.done ? 1 : 0);
+                  const isFullDone = prog >= 1;
+                  // Bottom-up fill: rect starting at bottom of circle, growing upward
+                  // Circle radius R, centred at 0,0
+                  // Fill rect: x=-R, y = R - prog*2R, width=2R, height=prog*2R
+                  const fillH = prog * R * 2;
+                  const fillY = R - fillH; // top of the fill rect
+                  const clipId = `clip-${n.id.replace(/[^a-z0-9]/gi,'_')}`;
+                  return (
+                    <>
+                      {/* Clip path — constrains fill exactly to circle boundary */}
+                      <clipPath id={clipId}>
+                        <circle cx={0} cy={0} r={R - 0.5}/>
+                      </clipPath>
+                      {/* Base circle */}
+                      <circle cx={0} cy={0} r={R}
+                        fill={(() => {
+                          if (isFullDone) return n.colour; // full strength on completion
+                          if (expandedId === n.id) return '#1E1848';
+                          if (n.depth === 0) return '#16123A';
+                          try {
+                            const [r,g,b] = hexToRgb(n.colour);
+                            const bgR=13,bgG=10,bgB=26;
+                            const t = n.depth === 1 ? 0.14 : 0.08;
+                            return `rgb(${Math.round(bgR+(r-bgR)*t)},${Math.round(bgG+(g-bgG)*t)},${Math.round(bgB+(b-bgB)*t)})`;
+                          } catch(e) { return '#16123A'; }
+                        })()}
+                        stroke={isFullDone ? n.colour : col}
+                        strokeWidth={expandedId === n.id ? 2.5 : (n.depth === 0 ? 2 : n.depth === 1 ? 1.5 : 1)}
+                        filter={n.depth === 0 || isFullDone ? "url(#glow)" : undefined}
+                        style={{ transition: 'fill 0.4s ease, stroke-width 0.2s ease' }}
+                      />
+                      {/* Bottom-up fill — clipped to circle, hidden when fully done (base handles it) */}
+                      {prog > 0 && !isFullDone && (
+                        <rect
+                          x={-R} y={fillY}
+                          width={R * 2} height={fillH}
+                          fill={n.colour}
+                          clipPath={`url(#${clipId})`}
+                          opacity={0.8}
+                          style={{ transition: 'y 0.45s ease, height 0.45s ease' }}
+                        />
+                      )}
+                      {/* Stroke on top to keep circle border clean */}
+                      <circle cx={0} cy={0} r={R}
+                        fill="none"
+                        stroke={isFullDone ? n.colour : col}
+                        strokeWidth={expandedId === n.id ? 2.5 : (n.depth === 0 ? 2 : n.depth === 1 ? 1.5 : 1)}
+                        style={{ transition: 'stroke 0.4s ease, stroke-width 0.2s ease' }}
+                      />
+                    </>
+                  );
+                })()}
+                {/* Hold progress ring */}
+                {isHolding && (
+                  <circle cx={0} cy={0} r={R + 4}
+                    fill="none" stroke={col} strokeWidth="2.5"
+                    strokeDasharray={`${holdDash} ${holdCircumference}`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 0 0)"
+                    opacity="0.9"
+                  />
+                )}
+                {/* Label */}
+                {labelLines.map((ln, li) => (
+                  <text key={li}
+                    x={0} y={(li - (labelLines.length-1)/2) * (n.depth === 0 ? 13 : 11)}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill="white"
+                    fontSize={fs}
+                    fontFamily="'Montserrat', sans-serif"
+                    fontWeight={fw}
+                    letterSpacing="0.6"
+                    style={{ pointerEvents: editMode ? 'auto' : 'none', cursor: editMode ? 'text' : 'default' }}
+                    onClick={editMode ? e => { e.stopPropagation(); setRenamingId(n.id); setRenameValue(n.label); } : undefined}
+                  >{ln}</text>
+                ))}
+                {/* Child count badge */}
+                {(n.children||[]).length > 0 && n.depth > 0 && (
+                  <text x={0} y={R + 12}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill={col} fontSize="8"
+                    fontFamily="'Montserrat', sans-serif" fontWeight="700"
+                    opacity="0.8"
+                    style={{ pointerEvents:'none' }}
+                  >+{(n.children||[]).length}</text>
+                )}
+                {/* Delete button — edit mode only */}
+                {editMode && (
+                  <>
+                    <circle cx={R - 3} cy={-R + 3} r={9}
+                      fill="#1A1035" stroke={col} strokeWidth="1.5"
+                      onClick={e => handleDeleteNode(e, n.id)}
+                      style={{ cursor:'pointer' }}
+                    />
+                    <text x={R - 3} y={-R + 4}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fill="#CCC" fontSize="8" fontFamily="Montserrat" fontWeight="800"
+                      style={{ pointerEvents:'none' }}
+                    >✕</text>
+                  </>
+                )}
+              </g>
+            );
+          })}
+
+          {/* Central node — tap for Why, hold to add domain */}
+          {(() => {
+            const rootHolding = holdNodeId === '__root__';
+            const rootHoldCirc = 2 * Math.PI * CR;
+            const rootHoldDash = rootHoldCirc * (holdProgress / 100);
+            return (
+              <g
+                style={{ cursor: 'pointer' }}
+                onPointerDown={e => {
+                  e.stopPropagation();
+                  if (addingRootActive.current) return;
+                  rootDownTime.current = Date.now();
+                  rootHoldFired.current = false;
+                  // Delay starting the hold animation — taps under 200ms never see the ring
+                  rootDelayTimer.current = setTimeout(() => {
+                    setHoldNodeId('__root__');
+                    setHoldProgress(0);
+                    holdInterval.current = setInterval(() => {
+                      const elapsed = Date.now() - rootDownTime.current;
+                      const prog = Math.min(100, (elapsed / HOLD_MS) * 100);
+                      setHoldProgress(prog);
+                      if (prog >= 100) {
+                        clearInterval(holdInterval.current);
+                        holdInterval.current = null;
+                        rootHoldFired.current = true;
+                        addingRootActive.current = true;
+                        setHoldNodeId(null);
+                        setHoldProgress(0);
+                        setAddingRoot(true);
+                        setRootLabel('');
+                      }
+                    }, 16);
+                  }, 200);
+                }}
+                onPointerUp={e => {
+                  e.stopPropagation();
+                  clearTimeout(rootDelayTimer.current);
+                  clearInterval(holdInterval.current);
+                  holdInterval.current = null;
+                  setHoldNodeId(null);
+                  setHoldProgress(0);
+                  if (addingRootActive.current) return;
+                  if (rootHoldFired.current) return;
+                  // Short tap — always open Why panel
+                  setShowWhy(true);
+                }}
+                onPointerLeave={e => {
+                  clearTimeout(rootDelayTimer.current);
+                  clearInterval(holdInterval.current);
+                  holdInterval.current = null;
+                  setHoldNodeId(null);
+                  setHoldProgress(0);
+                }}
+              >
+                <circle cx={cx} cy={cy} r={CR + 12}
+                  fill="none" stroke="var(--purple-light)" strokeWidth="1" opacity="0.15"
+                />
+                <circle cx={cx} cy={cy} r={CR}
+                  fill="url(#cGrad)" stroke="var(--purple-light)" strokeWidth="1"
+                  filter="url(#centerGlow)"
+                  opacity="0.95"
+                  style={{ opacity: animPhase === 0 ? 0 : 1, transition:'opacity 0.4s ease' }}
+                />
+                {/* Hold progress ring on central node */}
+                {rootHolding && (
+                  <circle cx={cx} cy={cy} r={CR + 6}
+                    fill="none" stroke="var(--purple-light)" strokeWidth="2.5"
+                    strokeDasharray={`${rootHoldDash} ${rootHoldCirc}`}
+                    strokeLinecap="round"
+                    transform={`rotate(-90 ${cx} ${cy})`}
+                    opacity="0.9"
+                  />
+                )}
+                {tLines.map((ln, li) => (
+                  <text key={li}
+                    x={cx} y={cy + (li - (tLines.length-1)/2) * 16}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill="white" fontSize="12"
+                    fontFamily="'Montserrat', sans-serif" fontWeight="900"
+                    letterSpacing="1.5"
+                    style={{ pointerEvents:'none', opacity: animPhase === 0 ? 0 : 1, transition:'opacity 0.4s ease 0.2s' }}
+                  >{ln}</text>
+                ))}
+                {/* + tap hint inside central node */}
+                <circle cx={cx} cy={cy + CR - 16} r={9}
+                  fill="rgba(107,79,187,0.25)" stroke="var(--purple-light)" strokeWidth="1"
+                  style={{ pointerEvents:'none', opacity: animPhase === 2 ? 0.7 : 0, transition:'opacity 0.3s ease' }}
+                />
+                <text x={cx} y={cy + CR - 15}
+                  textAnchor="middle" dominantBaseline="middle"
+                  fill="var(--purple-light)" fontSize="13"
+                  fontFamily="'Montserrat', sans-serif" fontWeight="400"
+                  style={{ pointerEvents:'none', opacity: animPhase === 2 ? 0.9 : 0, transition:'opacity 0.3s ease' }}
+                >+</text>
+                {/* Edit mode — pencil on central node */}
+                {editMode && (
+                  <g
+                    onPointerDown={e => {
+                      e.stopPropagation();
+                      // Cancel any hold in progress, then open rename
+                      clearTimeout(rootDelayTimer.current);
+                      clearInterval(holdInterval.current);
+                      holdInterval.current = null;
+                      setHoldNodeId(null);
+                      setHoldProgress(0);
+                      setRenamingRoot(true);
+                      setRenameRootValue(blueprint.title || '');
+                    }}
+                    onPointerUp={e => e.stopPropagation()}
+                    style={{ cursor:'pointer' }}>
+                    <circle cx={cx + CR - 3} cy={cy - CR + 3} r={10}
+                      fill="#1A1035" stroke="var(--purple-light)" strokeWidth="1.5"
+                    />
+                    <text x={cx + CR - 3} y={cy - CR + 4}
+                      textAnchor="middle" dominantBaseline="middle"
+                      fill="var(--purple-light)" fontSize="9"
+                      fontFamily="Montserrat" fontWeight="800"
+                      style={{ pointerEvents:'none' }}
+                    >✏</text>
+                  </g>
+                )}
+              </g>
+            );
+          })()}
+
+
+
+          {/* Hold hint tooltip */}
+          {holdNodeId && (
+            <g style={{ pointerEvents:'none' }}>
+              {(() => {
+                const hn = flatNodes.find(n => n.id === holdNodeId);
+                if (!hn) return null;
+                return (
+                  <text x={hn.x} y={hn.y - nodeRadius(hn.label, hn.depth) - 14}
+                    textAnchor="middle" dominantBaseline="middle"
+                    fill="var(--text-mid)" fontSize="9"
+                    fontFamily="'Montserrat', sans-serif" fontWeight="600"
+                    opacity="0.8"
+                  >Hold to add branch…</text>
+                );
+              })()}
+            </g>
+          )}
+
+          {/* Inline add-child + Push to FE */}
+          {addingTo && (() => {
+            const parentNode = flatNodes.find(n => n.id === addingTo);
+            if (!parentNode) return null;
+            const col = parentNode.displayColour || parentNode.colour;
+            const fullCol = parentNode.colour;
+            const iy = parentNode.y + nodeRadius(parentNode.label, parentNode.depth) + 28;
+            const foHeight = pushStage === 'horizon' ? 180 : pushStage === 'choice' ? 130 : 100;
+            return (
+              <foreignObject
+                x={parentNode.x - 130} y={iy}
+                width={260} height={foHeight}
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Add branch box */}
+                <div style={{
+                  display:'flex', gap:6, alignItems:'center',
+                  background:'rgba(18,15,42,0.97)',
+                  border:`1.5px solid ${col}`,
+                  borderRadius:10, padding:'8px 10px',
+                  boxShadow:'0 4px 20px rgba(0,0,0,0.5)',
+                  marginBottom:6
+                }}>
+                  <input
+                    autoFocus
+                    style={{
+                      background:'transparent', border:'none', outline:'none',
+                      fontFamily:'Montserrat,sans-serif', fontSize:12, fontWeight:600,
+                      color:'white', flex:1, minWidth:0
+                    }}
+                    placeholder="Branch label..."
+                    value={newLabel}
+                    onChange={e => setNewLabel(e.target.value)}
+                    onKeyDown={e => { e.stopPropagation(); if (e.key==='Enter') handleAddChild(); if (e.key==='Escape') { setAddingTo(null); addingToActive.current = false; setPushStage(null); } }}
+                  />
+                  <span
+                    onClick={handleAddChild}
+                    style={{ fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase', color:col, cursor:'pointer', whiteSpace:'nowrap' }}
+                  >Add</span>
+                </div>
+
+                {/* Push to Focus Engine box */}
+                {pushFeedback ? (
+                  <div style={{
+                    background:'rgba(11,191,191,0.15)', border:'1.5px solid var(--teal)',
+                    borderRadius:10, padding:'8px 12px', textAlign:'center',
+                    fontFamily:'Montserrat,sans-serif', fontSize:11, fontWeight:700,
+                    color:'var(--teal)', letterSpacing:'0.5px'
+                  }}>{pushFeedback}</div>
+                ) : pushStage === null ? (
+                  <div
+                    onClick={() => { setPushStage('choice'); setPushNodeId(addingTo); }}
+                    style={{
+                      background:'rgba(18,15,42,0.97)', border:`1.5px solid rgba(107,79,187,0.5)`,
+                      borderRadius:10, padding:'8px 12px', cursor:'pointer',
+                      fontFamily:'Montserrat,sans-serif', fontSize:10, fontWeight:700,
+                      color:'var(--purple-light)', letterSpacing:'1.5px', textTransform:'uppercase',
+                      textAlign:'center', transition:'border-color 0.2s'
+                    }}
+                  >→ Push to Focus Engine</div>
+                ) : pushStage === 'choice' ? (
+                  <div style={{
+                    background:'rgba(18,15,42,0.97)', border:`1.5px solid ${fullCol}`,
+                    borderRadius:10, padding:'10px 12px',
+                    fontFamily:'Montserrat,sans-serif'
+                  }}>
+                    <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)', marginBottom:8}}>Push as</div>
+                    <div style={{display:'flex', gap:6}}>
+                      <span
+                        onClick={() => pushAsLaunch(pushNodeId)}
+                        style={{flex:1, background:fullCol, color:'#0D0A1A', borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase'}}
+                      >Launch</span>
+                      <span
+                        onClick={() => setPushStage('horizon')}
+                        style={{flex:1, background:'transparent', color:fullCol, border:`1px solid ${fullCol}`, borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase'}}
+                      >Horizon</span>
+                    </div>
+                  </div>
+                ) : pushStage === 'horizon' ? (
+                  <div style={{
+                    background:'rgba(18,15,42,0.97)', border:`1.5px solid ${fullCol}`,
+                    borderRadius:10, padding:'10px 12px',
+                    fontFamily:'Montserrat,sans-serif'
+                  }}>
+                    <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)', marginBottom:8}}>Add to Horizon as</div>
+                    <div style={{display:'flex', gap:6}}>
+                      {['Task','Project','Folder'].map(t => (
+                        <span
+                          key={t}
+                          onClick={() => pushAsHorizonItem(pushNodeId, t.toLowerCase())}
+                          style={{flex:1, background:'transparent', color:fullCol, border:`1px solid ${fullCol}`, borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:900, letterSpacing:'0.5px', textTransform:'uppercase'}}
+                        >{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </foreignObject>
+            );
+          })()}
+
+          {/* Rename input */}
+          {renamingId && (() => {
+            const rn = flatNodes.find(n => n.id === renamingId);
+            if (!rn) return null;
+            const col = rn.colour;
+            const R = nodeRadius(rn.label, rn.depth);
+            return (
+              <foreignObject
+                x={rn.x - 110} y={rn.y - 23}
+                width={220} height={46}
+                onClick={e => e.stopPropagation()}
+              >
+                <div style={{
+                  display:'flex', gap:6, alignItems:'center',
+                  background:'rgba(18,15,42,0.97)',
+                  border:`1.5px solid ${col}`,
+                  borderRadius:10, padding:'8px 10px',
+                  boxShadow:'0 4px 20px rgba(0,0,0,0.5)'
+                }}>
+                  <input
+                    autoFocus
+                    style={{
+                      background:'transparent', border:'none', outline:'none',
+                      fontFamily:'Montserrat,sans-serif', fontSize:12, fontWeight:700,
+                      color:'white', flex:1, minWidth:0, textTransform:'uppercase', letterSpacing:'0.5px'
+                    }}
+                    value={renameValue}
+                    onChange={e => setRenameValue(e.target.value)}
+                    onKeyDown={e => { e.stopPropagation(); if (e.key==='Enter') handleRename(); if (e.key==='Escape') { setRenamingId(null); setRenameValue(''); } }}
+                  />
+                  <span onClick={handleRename} style={{fontSize:10,fontWeight:900,letterSpacing:'1px',textTransform:'uppercase',color:col,cursor:'pointer',whiteSpace:'nowrap'}}>Save</span>
+                </div>
+              </foreignObject>
+            );
+          })()}
+
+        </g>
+      </svg>
+
+      {/* Controls overlay */}
+      <div style={{ position:'absolute', top:16, right:16, display:'flex', gap:8, zIndex:20 }}>
+        {/* Why button — always available */}
+        <button
+          onClick={e => { e.stopPropagation(); setShowWhy(true); }}
+          style={{
+            background:'var(--card)', border:'1px solid var(--teal)',
+            borderRadius:10, padding:'9px 14px',
+            fontFamily:'Montserrat,sans-serif', fontSize:11, fontWeight:700,
+            letterSpacing:'1.5px', textTransform:'uppercase',
+            color:'var(--teal)', cursor:'pointer', transition:'all 0.2s'
+          }}
+        >Your Why</button>
+        {/* Edit mode toggle */}
+        <button
+          onClick={e => { e.stopPropagation(); setEditMode(m => !m); }}
+          style={{
+            background: editMode ? 'rgba(232,69,60,0.15)' : 'var(--card)',
+            border: `1px solid ${editMode ? 'var(--accent)' : 'var(--border)'}`,
+            borderRadius:10, padding:'9px 16px',
+            fontFamily:'Montserrat,sans-serif', fontSize:11, fontWeight:700,
+            letterSpacing:'1.5px', textTransform:'uppercase',
+            color: editMode ? 'var(--accent)' : 'var(--text-mid)',
+            cursor:'pointer', transition:'all 0.2s'
+          }}
+        >{editMode ? 'Done editing' : 'Edit map'}</button>
+        {/* Zoom reset */}
+        <button
+          onClick={e => { e.stopPropagation(); setTransform({ x:0, y:0, scale:1 }); }}
+          style={{
+            background:'var(--card)', border:'1px solid var(--border)',
+            borderRadius:10, padding:'9px 12px',
+            fontFamily:'Montserrat,sans-serif', fontSize:11, fontWeight:700,
+            letterSpacing:'1px', textTransform:'uppercase',
+            color:'var(--text-mid)', cursor:'pointer', transition:'all 0.2s'
+          }}
+        >Reset</button>
+      </div>
+
+      {/* Add root node panel */}
+      {/* Add domain modal — smooth overlay */}
+      {addingRoot && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position:'absolute', top:'50%', left:'50%',
+            transform:'translate(-50%,-50%)',
+            width:320, zIndex:30,
+            animation:'whyPanelIn 0.25s cubic-bezier(0.34,1.1,0.64,1) forwards'
+          }}
+        >
+          <div style={{
+            background:'var(--card)', border:'1.5px solid var(--purple-light)',
+            borderRadius:16, padding:'24px 24px 20px',
+            boxShadow:'0 24px 60px rgba(0,0,0,0.55)'
+          }}>
+            <div style={{fontSize:10,fontWeight:900,letterSpacing:'2px',textTransform:'uppercase',color:'var(--purple-light)',marginBottom:16}}>New domain</div>
+            <input
+              autoFocus
+              style={{
+                width:'100%', background:'var(--surface)', border:'1px solid var(--border)',
+                borderRadius:10, padding:'12px 14px', fontFamily:'Montserrat,sans-serif',
+                fontSize:13, fontWeight:700, color:'var(--text)', outline:'none',
+                textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:14,
+                transition:'border-color 0.2s', boxSizing:'border-box'
+              }}
+              placeholder="Domain name..."
+              value={rootLabel}
+              onChange={e => setRootLabel(e.target.value)}
+              onKeyDown={e => {
+                e.stopPropagation();
+                if (e.key==='Enter') handleAddRoot();
+                if (e.key==='Escape') { setAddingRoot(false); addingRootActive.current = false; setRootLabel(''); }
+              }}
+              onFocus={e => e.target.style.borderColor='var(--purple-light)'}
+              onBlur={e => e.target.style.borderColor='var(--border)'}
+            />
+            <div style={{display:'flex', gap:8}}>
+              <button
+                onClick={handleAddRoot}
+                disabled={!rootLabel.trim()}
+                style={{
+                  flex:1, background:'var(--purple)', color:'white', border:'none',
+                  borderRadius:10, padding:'11px', fontFamily:'Montserrat,sans-serif',
+                  fontSize:11, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase',
+                  cursor:'pointer', opacity: rootLabel.trim() ? 1 : 0.4
+                }}
+              >Add domain</button>
+              <button
+                onClick={() => { setAddingRoot(false); addingRootActive.current = false; setRootLabel(''); }}
+                style={{
+                  background:'none', border:'1px solid var(--border)', color:'var(--text-dim)',
+                  borderRadius:10, padding:'11px 14px', fontFamily:'Montserrat,sans-serif',
+                  fontSize:11, fontWeight:700, cursor:'pointer'
+                }}
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rename root modal */}
+      {renamingRoot && (
+        <div
+          onClick={e => e.stopPropagation()}
+          style={{
+            position:'absolute', top:'50%', left:'50%',
+            transform:'translate(-50%,-50%)',
+            width:360, zIndex:30,
+            animation:'whyPanelIn 0.25s cubic-bezier(0.34,1.1,0.64,1) forwards'
+          }}
+        >
+          <div style={{
+            background:'var(--card)', border:'1.5px solid var(--purple-light)',
+            borderRadius:16, padding:'24px 24px 20px',
+            boxShadow:'0 24px 60px rgba(0,0,0,0.55)'
+          }}>
+            <div style={{fontSize:10,fontWeight:900,letterSpacing:'2px',textTransform:'uppercase',color:'var(--purple-light)',marginBottom:16}}>Rename goal</div>
+            <input
+              autoFocus
+              style={{
+                width:'100%', background:'var(--surface)', border:'1px solid var(--border)',
+                borderRadius:10, padding:'12px 14px', fontFamily:'Montserrat,sans-serif',
+                fontSize:13, fontWeight:700, color:'var(--text)', outline:'none',
+                marginBottom:14, transition:'border-color 0.2s', boxSizing:'border-box'
+              }}
+              value={renameRootValue}
+              onChange={e => setRenameRootValue(e.target.value)}
+              onKeyDown={e => { e.stopPropagation(); if (e.key==='Enter') handleRenameRoot(); if (e.key==='Escape') { setRenamingRoot(false); setRenameRootValue(''); } }}
+              onFocus={e => e.target.style.borderColor='var(--purple-light)'}
+              onBlur={e => e.target.style.borderColor='var(--border)'}
+            />
+            <div style={{display:'flex', gap:8}}>
+              <button
+                onClick={handleRenameRoot}
+                disabled={!renameRootValue.trim()}
+                style={{
+                  flex:1, background:'var(--purple)', color:'white', border:'none',
+                  borderRadius:10, padding:'11px', fontFamily:'Montserrat,sans-serif',
+                  fontSize:11, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase',
+                  cursor:'pointer', opacity: renameRootValue.trim() ? 1 : 0.4
+                }}
+              >Save</button>
+              <button
+                onClick={() => { setRenamingRoot(false); setRenameRootValue(''); }}
+                style={{
+                  background:'none', border:'1px solid var(--border)', color:'var(--text-dim)',
+                  borderRadius:10, padding:'11px 14px', fontFamily:'Montserrat,sans-serif',
+                  fontSize:11, fontWeight:700, cursor:'pointer'
+                }}
+              >Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Why panel — always available */}
+      {showWhy && (() => {
+        const qs = ["Your goal","Why you're motivated","What it gives you","Why that matters","What you'll know about yourself"];
+        const answers = (() => {
+          const base = (blueprint.clarificationAnswers && blueprint.clarificationAnswers.length === 5)
+            ? [...blueprint.clarificationAnswers]
+            : ['', '', '', '', ''];
+          // Always use blueprint.title as source of truth for field 0
+          base[0] = blueprint.title || base[0] || '';
+          return base;
+        })();
+
+        const saveField = async (i, val) => {
+          // Always work from a fresh 5-slot array
+          const base = (blueprint.clarificationAnswers && blueprint.clarificationAnswers.length === 5)
+            ? [...blueprint.clarificationAnswers]
+            : ['', '', '', '', ''];
+          base[i] = val;
+          const newBp = {
+            ...blueprint,
+            clarificationAnswers: base,
+            // Field 0 = goal — always keep title in sync
+            title: i === 0 && val.trim() ? val.trim() : blueprint.title,
+            updatedAt: new Date().toISOString()
+          };
+          await onUpdateBlueprint(newBp);
+          setEditingField(null);
+          setEditingValue('');
+        };
+
+        return (
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              position:'absolute', top:'50%', left:'50%',
+              width:'90%', maxWidth:520,
+              background:'var(--card)', border:'1px solid var(--border)',
+              borderRadius:20, padding:'32px 36px',
+              boxShadow:'0 32px 80px rgba(0,0,0,0.55)',
+              zIndex:30,
+              animation:'whyPanelIn 0.3s cubic-bezier(0.34,1.1,0.64,1) forwards',
+              maxHeight:'80vh', overflowY:'auto'
+            }}
+          >
+            <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24}}>
+              <div style={{fontSize:10,fontWeight:900,letterSpacing:'2px',textTransform:'uppercase',color:'var(--teal)'}}>Blueprint · Your Why</div>
+              <button onClick={() => { setShowWhy(false); setEditingField(null); }} style={{background:'none',border:'none',color:'var(--text-dim)',cursor:'pointer',fontSize:18,lineHeight:1}}>✕</button>
+            </div>
+            {qs.map((q, i) => (
+              <div key={i} style={{paddingBottom:16, marginBottom:16, borderBottom: i < 4 ? '1px solid var(--border)' : 'none'}}>
+                <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:6}}>
+                  <div style={{fontSize:10,fontWeight:900,letterSpacing:'1.5px',textTransform:'uppercase',color:'var(--text-dim)',flex:1}}>{q}</div>
+                  {editingField !== i && (
+                    <button
+                      onClick={() => { setEditingField(i); setEditingValue(answers[i] || ''); }}
+                      style={{background:'none',border:'none',cursor:'pointer',color:'var(--text-faint)',fontSize:12,padding:'2px 4px',lineHeight:1,transition:'color 0.2s'}}
+                      onMouseEnter={e => e.currentTarget.style.color='var(--purple-light)'}
+                      onMouseLeave={e => e.currentTarget.style.color='var(--text-faint)'}
+                      title="Edit"
+                    >✏</button>
+                  )}
+                </div>
+                {editingField === i ? (
+                  <div style={{display:'flex', flexDirection:'column', gap:8}}>
+                    <textarea
+                      autoFocus
+                      style={{
+                        width:'100%', background:'var(--surface)', border:'1px solid var(--purple-light)',
+                        borderRadius:8, padding:'10px 12px', fontFamily:'Montserrat,sans-serif',
+                        fontSize:13, fontWeight:600, color:'var(--text)', resize:'none',
+                        outline:'none', lineHeight:1.5, minHeight:60
+                      }}
+                      value={editingValue}
+                      onChange={e => setEditingValue(e.target.value)}
+                      onKeyDown={e => { if (e.key==='Escape') { setEditingField(null); setEditingValue(''); } }}
+                    />
+                    <div style={{display:'flex', gap:8}}>
+                      <button
+                        onClick={() => saveField(i, editingValue)}
+                        style={{
+                          background:'var(--purple)', color:'white', border:'none',
+                          borderRadius:8, padding:'8px 16px', fontFamily:'Montserrat,sans-serif',
+                          fontSize:11, fontWeight:700, letterSpacing:'1px', textTransform:'uppercase',
+                          cursor:'pointer'
+                        }}
+                      >Save</button>
+                      <button
+                        onClick={() => { setEditingField(null); setEditingValue(''); }}
+                        style={{
+                          background:'none', color:'var(--text-dim)', border:'1px solid var(--border)',
+                          borderRadius:8, padding:'8px 14px', fontFamily:'Montserrat,sans-serif',
+                          fontSize:11, fontWeight:700, letterSpacing:'1px', textTransform:'uppercase',
+                          cursor:'pointer'
+                        }}
+                      >Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      fontSize:14, fontWeight:600, lineHeight:1.6,
+                      color: answers[i] ? (i === 4 ? 'var(--teal)' : 'var(--text)') : 'var(--text-faint)',
+                      fontStyle: answers[i] ? 'normal' : 'italic',
+                      cursor:'pointer'
+                    }}
+                    onClick={() => { setEditingField(i); setEditingValue(answers[i] || ''); }}
+                  >{answers[i] || 'Click to add your answer...'}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
+      {/* Instructions */}
+      <div style={{
+        position:'absolute', bottom:24, left:'50%', transform:'translateX(-50%)',
+        fontSize:10, color:'var(--text-faint)', fontWeight:600,
+        letterSpacing:'0.5px', textAlign:'center', pointerEvents:'none', whiteSpace:'nowrap'
+      }}>
+        Hold centre to add domain · Hold node to add branch · Scroll to zoom · Drag to pan
+      </div>
+    </div>
+  );
+}
+
+// ── Add node panel ────────────────────────────────────────────
+function AddNodePanel({ onAdd, maxReached }) {
+  const [val, setVal] = React.useState('');
+  const add = () => { if (val.trim() && !maxReached) { onAdd(val.trim()); setVal(''); } };
+  return (
+    <div className="add-domain-panel">
+      <span style={{fontSize:11,fontWeight:700,letterSpacing:'1.5px',textTransform:'uppercase',color:'var(--text-dim)',whiteSpace:'nowrap'}}>Add domain</span>
+      <input
+        className="add-domain-input"
+        placeholder={maxReached ? 'Max 20 domains' : 'e.g. Health, Work, Family...'}
+        value={val}
+        onChange={e => setVal(e.target.value)}
+        onKeyDown={e => { e.stopPropagation(); if (e.key==='Enter') add(); }}
+        onClick={e => e.stopPropagation()}
+        maxLength={30}
+        disabled={maxReached}
+      />
+      <button className="btn-add-small" onClick={e => { e.stopPropagation(); add(); }} disabled={!val.trim() || maxReached}>Add</button>
+    </div>
+  );
+}
+
+// ── Map view wrapper ─────────────────────────────────────────
+function MapView({ blueprint, onBack, onUpdateBlueprint }) {
+  const bp = migrateBlueprint(blueprint);
+  return (
+    <div className="map-screen">
+      <button className="map-back-btn" onClick={onBack}>← All Blueprints</button>
+      <BlueprintCanvas
+        blueprint={bp}
+        onUpdateBlueprint={onUpdateBlueprint}
+      />
+    </div>
+  );
+}
+
+
+
+// ── Blueprint dashboard ───────────────────────────────────────
+function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates }) {
+  return (
+    <div className="dashboard-screen">
+      <div className="dashboard-heading">Your Blueprints</div>
+      <div className="dashboard-sub">Each Blueprint is a structured map of a goal or area of your life.</div>
+
+      <div style={{display:'flex', gap:10, marginBottom:40, flexWrap:'wrap'}}>
+        <button className="btn-new-blueprint" style={{marginBottom:0}} onClick={onNew}>
+          ◆ New Blueprint
+        </button>
+        <button
+          onClick={onTemplates}
+          style={{
+            background:'transparent',
+            border:'1px solid var(--purple-light)',
+            borderRadius:12, padding:'14px 24px',
+            fontFamily:'Montserrat,sans-serif', fontSize:11, fontWeight:900,
+            letterSpacing:'2px', textTransform:'uppercase',
+            color:'var(--purple-light)', cursor:'pointer',
+            transition:'all 0.2s'
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background='rgba(107,79,187,0.12)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background='transparent'; }}
+        >
+          ◈ Templates
+        </button>
+      </div>
+
+      {maps.length === 0 ? (
+        <div className="empty-state fade-up">
+          <div className="empty-state-icon">◇</div>
+          <div className="empty-state-text">No Blueprints yet.<br/>Create your first one above.</div>
+        </div>
+      ) : (
+        <div>
+          {maps.map(m => (
+            <div
+              key={m.id}
+              style={{
+                background: 'var(--card)',
+                border: '1px solid var(--border)',
+                borderRadius: 14,
+                padding: '20px 24px',
+                marginBottom: 12,
+                cursor: 'pointer',
+                transition: 'border-color 0.2s',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16
+              }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--purple-light)'}
+              onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
+              onClick={() => onOpen(m.id)}
+            >
+              <div style={{flex:1}}>
+                <div style={{fontFamily:"'Montserrat',sans-serif", fontSize:15, fontWeight:800, color:'var(--text)', marginBottom:4, textTransform:'uppercase', letterSpacing:'0.5px'}}>{m.title}</div>
+                <div style={{fontSize:11,color:'var(--text-dim)',fontWeight:600,letterSpacing:'0.5px'}}>
+                  {m.domains ? m.domains.length : 0} domains · Created {new Date(m.createdAt).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric'})}
+                </div>
+              </div>
+              <button
+                onClick={e => {
+                  e.stopPropagation();
+                  if (window.confirm('Delete this Blueprint? This cannot be undone.')) onDelete(m.id);
+                }}
+                style={{
+                  background:'none', border:'1px solid var(--border)', borderRadius:8,
+                  color:'var(--text-faint)', cursor:'pointer', padding:'6px 10px',
+                  fontSize:11, fontWeight:700, fontFamily:'Montserrat,sans-serif',
+                  letterSpacing:'1px', textTransform:'uppercase',
+                  transition:'border-color 0.2s, color 0.2s', flexShrink:0
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor='var(--accent)'; e.currentTarget.style.color='var(--accent)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-faint)'; }}
+              >Delete</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Presets ───────────────────────────────────────────────────
+const PRESETS = [
+  {
+    id: 'blank4', label: 'Four domains', desc: 'A clean map with 4 domains to define yourself',
+    title: 'My Goal',
+    nodes: ['Domain 1','Domain 2','Domain 3','Domain 4']
+  },
+  {
+    id: 'blank6', label: 'Six domains', desc: 'Six domains for a fuller picture',
+    title: 'My Goal',
+    nodes: ['Domain 1','Domain 2','Domain 3','Domain 4','Domain 5','Domain 6']
+  },
+  {
+    id: 'blank8', label: 'Eight domains', desc: 'Eight domains — whole life mapping',
+    title: 'My Goal',
+    nodes: ['Domain 1','Domain 2','Domain 3','Domain 4','Domain 5','Domain 6','Domain 7','Domain 8']
+  },
+  {
+    id: 'health', label: 'Health & Fitness', desc: 'Physical and mental wellbeing',
+    title: 'Better health and fitness',
+    nodes: ['Exercise','Nutrition','Sleep','Mental health','Medical','Recovery']
+  },
+  {
+    id: 'home', label: 'Home life', desc: 'Household, admin, and routines',
+    title: 'A home that runs smoothly',
+    nodes: ['Cleaning','Admin','Finance','Repairs','Food & shopping','Organisation']
+  },
+  {
+    id: 'work', label: 'Work project', desc: 'A professional goal or project',
+    title: 'Deliver my project',
+    nodes: ['Planning','Delivery','Stakeholders','Communication','Development','Review']
+  },
+  {
+    id: 'business', label: 'Build a business', desc: 'Founding or growing a venture',
+    title: 'Build my business',
+    nodes: ['Product','Marketing','Sales','Operations','Finance','Team']
+  },
+  {
+    id: 'personal', label: 'Personal development', desc: 'Growth across life areas',
+    title: 'Become who I want to be',
+    nodes: ['Skills','Relationships','Mindset','Finances','Health','Purpose']
+  },
+];
+
+function PresetsScreen({ onSelect, onBack }) {
+  return (
+    <div className="clarify-screen">
+      <div className="clarify-card fade-up" style={{maxWidth:600}}>
+        <div className="clarify-step-label">Quick start</div>
+        <div className="clarify-question" style={{fontFamily:"'Montserrat',sans-serif",fontWeight:900,fontSize:18,letterSpacing:'0.5px',textTransform:'uppercase'}}>Choose a starting point</div>
+        <div className="clarify-hint">Select a preset to populate your Blueprint, or go back to answer the full goal clarification questions.</div>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:24}}>
+          {PRESETS.map(p => (
+            <div
+              key={p.id}
+              onClick={() => onSelect(p)}
+              style={{
+                background:'var(--surface)', border:'1px solid var(--border)',
+                borderRadius:12, padding:'14px 16px', cursor:'pointer',
+                transition:'border-color 0.2s, background 0.2s'
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor='var(--purple-light)'; e.currentTarget.style.background='var(--card)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.background='var(--surface)'; }}
+            >
+              <div style={{fontSize:12,fontWeight:800,color:'var(--text)',letterSpacing:'0.5px',marginBottom:4,textTransform:'uppercase'}}>{p.label}</div>
+              <div style={{fontSize:11,color:'var(--text-dim)',fontWeight:500,lineHeight:1.5}}>{p.desc}</div>
+            </div>
+          ))}
+        </div>
+        <button className="btn-secondary" onClick={onBack}>← Back</button>
+      </div>
+    </div>
+  );
+}
+
+// ── Main app (post-auth) ──────────────────────────────────────
+function BlueprintApp({ userEmail, userPath }) {
+  const [appState, setAppState] = useState('loading');
+  const [blueprintMaps, setBlueprintMaps] = useState([]);
+  const [pendingAnswers, setPendingAnswers] = useState(null);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [activeBlueprintId, setActiveBlueprintId] = useState(null);
+
+  useEffect(() => {
+    async function init() {
+      try {
+        await loadFromFirebase(userPath);
+        const maps = ls('tapl-blueprint-maps', []);
+        setBlueprintMaps(maps);
+        setAppState('dashboard');
+      } catch(e) {
+        console.error('Firebase load error:', e);
+        const maps = ls('tapl-blueprint-maps', []);
+        setBlueprintMaps(maps);
+        setAppState('dashboard');
+      }
+    }
+    init();
+  }, [userPath]);
+
+  // Listen for Focus Engine data writes from Blueprint push actions
+  useEffect(() => {
+    async function handleFESync() {
+      try { await saveToFirebase(userPath); } catch(e) { console.error('FE sync error:', e); }
+    }
+    window.addEventListener('tapl-fe-sync', handleFESync);
+    return () => window.removeEventListener('tapl-fe-sync', handleFESync);
+  }, [userPath]);
+
+  const handleClarifyComplete = (answers) => {
+    setPendingAnswers(answers);
+    setAppState('summary');
+  };
+
+  const handleConfirmBlueprint = async () => {
+    const newMap = {
+      id: 'bp_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+      title: pendingAnswers[0],
+      clarificationAnswers: pendingAnswers,
+      nodes: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const updated = [...blueprintMaps, newMap];
+    setBlueprintMaps(updated);
+    lsSet('tapl-blueprint-maps', updated);
+    try { await saveToFirebase(userPath); } catch(e) { console.error('Save error:', e); }
+    fireConfetti(3000);
+    setAppState('dashboard');
+    setPendingAnswers(null);
+  };
+
+  if (appState === 'loading') {
+    return (
+      <div className="app-shell">
+        <div className="status-card">
+          <div className="spinner"/>
+          <p className="status-body">Loading your Blueprints...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (appState === 'clarify') {
+    return (
+      <ClarificationSequence
+        onComplete={handleClarifyComplete}
+        onSkip={() => setAppState('presets')}
+      />
+    );
+  }
+
+  if (appState === 'presets') {
+    return (
+      <PresetsScreen
+        onSelect={async (preset) => {
+          const newMap = {
+            id: 'bp_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+            title: preset.title,
+            clarificationAnswers: [],
+            nodes: preset.nodes.map((name, i) => ({
+              id: genId('n'),
+              label: name,
+              done: false,
+              colour: DOMAIN_COLOURS[i % DOMAIN_COLOURS.length],
+              children: []
+            })),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          const updated = [...blueprintMaps, newMap];
+          setBlueprintMaps(updated);
+          lsSet('tapl-blueprint-maps', updated);
+          try { await saveToFirebase(userPath); } catch(e) { console.error(e); }
+          fireConfetti(2500);
+          setAppState('dashboard');
+        }}
+        onBack={() => setAppState('dashboard')}
+      />
+    );
+  }
+
+  if (appState === 'summary') {
+    return (
+      <SummaryScreen
+        answers={pendingAnswers}
+        onConfirm={handleConfirmBlueprint}
+        onEdit={() => setAppState('clarify')}
+      />
+    );
+  }
+
+  const handleUpdateBlueprint = async (updated) => {
+    const newMaps = blueprintMaps.map(m => m.id === updated.id ? updated : m);
+    setBlueprintMaps(newMaps);
+    lsSet('tapl-blueprint-maps', newMaps);
+    try { await saveToFirebase(userPath); } catch(e) { console.error('Save error:', e); }
+  };
+
+  if (appState === 'map' && activeBlueprintId) {
+    const bp = blueprintMaps.find(m => m.id === activeBlueprintId);
+    if (bp) return (
+      <>
+        <canvas id="confetti-canvas"/>
+        <MapView
+          blueprint={bp}
+          onBack={() => { setAppState('dashboard'); setActiveBlueprintId(null); }}
+          onUpdateBlueprint={handleUpdateBlueprint}
+          userPath={userPath}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <canvas id="confetti-canvas"/>
+      <Dashboard
+        maps={blueprintMaps}
+        onNew={() => setAppState('clarify')}
+        onTemplates={() => setAppState('presets')}
+        onOpen={(id) => { setActiveBlueprintId(id); setAppState('map'); }}
+        onDelete={async (id) => {
+          const updated = blueprintMaps.filter(m => m.id !== id);
+          setBlueprintMaps(updated);
+          lsSet('tapl-blueprint-maps', updated);
+          try { await saveToFirebase(userPath); } catch(e) { console.error(e); }
+        }}
+      />
+    </>
+  );
+}
+
+// ── Root ──────────────────────────────────────────────────────
+function App() {
+  const [authState, setAuthState] = useState('checking');
+  const [userEmail, setUserEmail] = useState(null);
+  const [userPath, setUserPath] = useState(null);
+  const [isDark, setIsDark] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('tapl-blueprint-email');
+    if (saved) {
+      handleAuth(saved);
+    } else {
+      setAuthState('login');
+    }
+    // Load saved theme
+    const savedTheme = localStorage.getItem('tapl-blueprint-theme');
+    const dark = savedTheme !== 'light';
+    setIsDark(dark);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  }, []);
+
+  function toggleTheme() {
+    const next = !isDark;
+    setIsDark(next);
+    document.documentElement.setAttribute('data-theme', next ? 'dark' : 'light');
+    localStorage.setItem('tapl-blueprint-theme', next ? 'dark' : 'light');
+  }
+
+  async function handleAuth(email) {
+    setAuthState('loading');
+    const hash = await hashEmail(email);
+    const path = 'users/' + hash;
+    window.__taplUserEmail = email;
+    localStorage.setItem('tapl-blueprint-email', email);
+    setUserEmail(email);
+    setUserPath(path);
+    setAuthState('app');
+  }
+
+  if (authState === 'checking' || authState === 'loading') {
+    return (
+      <div className="auth-screen">
+        <div className="status-card">
+          <div className="spinner"/>
+          <p className="status-body">Loading Blueprint...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authState === 'login') {
+    return (
+      <>
+        <div className="header">
+          <div className="header-logo">
+            <div className="logo-mark">B</div>
+            <div>
+              <div className="header-title">Blueprint</div>
+              <div className="header-sub">Performance Lab by TAPL</div>
+            </div>
+          </div>
+        </div>
+        <AuthScreen onAuth={handleAuth} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="header">
+        <div className="header-logo">
+          <div className="logo-mark">B</div>
+          <div>
+            <div className="header-title">Blueprint</div>
+            <div className="header-sub">Performance Lab by TAPL</div>
+          </div>
+        </div>
+        <div style={{display:'flex', alignItems:'center', gap:12}}>
+          <button
+            onClick={toggleTheme}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+            style={{
+              background:'none', border:'1px solid var(--border)',
+              borderRadius:8, padding:'6px 10px', cursor:'pointer',
+              color:'var(--text-mid)', fontSize:14, lineHeight:1,
+              transition:'border-color 0.2s, color 0.2s'
+            }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor='var(--purple-light)'; e.currentTarget.style.color='var(--text)'; }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.color='var(--text-mid)'; }}
+          >{isDark ? '☀' : '☾'}</button>
+          <div className="header-user">{userEmail}</div>
+        </div>
+      </div>
+      <BlueprintApp userEmail={userEmail} userPath={'users/' + userPath.split('/')[1]} />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
