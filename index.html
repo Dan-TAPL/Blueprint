@@ -1493,20 +1493,21 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   }
 
   // ── Push to Focus Engine helpers ──────────────────────────
+  // ── Focus Engine data helpers ────────────────────────────────
   function getFEData() {
     try {
-      const horizon = JSON.parse(localStorage.getItem('tapl-horizon') || '[]');
-      const folders = JSON.parse(localStorage.getItem('tapl-hz-folders') || '[]');
-      return { horizon, folders };
-    } catch(e) { return { horizon: [], folders: [] }; }
+      return {
+        horizon: JSON.parse(localStorage.getItem('tapl-horizon') || '[]'),
+        folders: JSON.parse(localStorage.getItem('tapl-hz-folders') || '[]'),
+        tabs:    JSON.parse(localStorage.getItem('tapl-hz-tabs')    || '[]'),
+      };
+    } catch(e) { return { horizon: [], folders: [], tabs: [] }; }
   }
 
-  function saveFEData(horizon, folders) {
-    localStorage.setItem('tapl-horizon', JSON.stringify(horizon));
+  function saveFEData({ horizon, folders, tabs }) {
+    localStorage.setItem('tapl-horizon',    JSON.stringify(horizon));
     localStorage.setItem('tapl-hz-folders', JSON.stringify(folders));
-    // Trigger Firebase save via the shared saveToFirebase — use userPath from props
-    // userPath is passed via blueprint prop — access via onUpdateBlueprint closure
-    // Simplest: dispatch a custom event that BlueprintApp listens to
+    localStorage.setItem('tapl-hz-tabs',    JSON.stringify(tabs));
     window.dispatchEvent(new CustomEvent('tapl-fe-sync'));
   }
 
@@ -1514,7 +1515,6 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     return prefix + Date.now() + (prefix === 'hz_' ? '_' + Math.random().toString(36).slice(2,7) : '');
   }
 
-  // Find a node in the blueprint tree by id, returns node with children intact
   function findTreeNode(nodes, id) {
     for (const n of nodes) {
       if (n.id === id) return n;
@@ -1526,13 +1526,25 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     return null;
   }
 
-  function makeChunk(label) {
-    return {
-      id: genId('chunk'),
-      text: label,
-      completed: false,
-      date: ''
-    };
+  // Recursively collect all descendant labels depth-first, with optional prefix context
+  function collectDescendants(node, prefix) {
+    const results = [];
+    (node.children || []).forEach(c => {
+      const label = prefix ? `${prefix} › ${c.label}` : c.label;
+      results.push(label);
+      collectDescendants(c, label).forEach(l => results.push(l));
+    });
+    return results;
+  }
+
+  // Max depth of a subtree (0 = no children)
+  function subtreeDepth(node) {
+    if (!node.children || !node.children.length) return 0;
+    return 1 + Math.max(...node.children.map(subtreeDepth));
+  }
+
+  function makeChunk(label, index) {
+    return { id: `chunk_${Date.now()}_${index}`, name: label, done: false };
   }
 
   function makeHorizonItem(name, type, folderId, chunks) {
@@ -1540,73 +1552,126 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
       id: makeId('hz_'), type, name,
       dueDate: '', triggerDate: '',
       chunks: chunks || [],
-      completed: false, repeat: '', pulseFreq: 'medium',
+      completed: false, repeat: 'none', pulseFreq: 'medium',
       needsCarryForward: false, lastCompletedAt: null,
-      folderId: folderId || '',
+      folderId: folderId || null,
       notes: `From Blueprint: ${blueprint.title}`,
       createdAt: new Date().toISOString(),
-      lastReviewed: new Date().toISOString()
+      lastReviewed: new Date().toISOString(),
+      dateConfirmed: true, size: 'S', autoRefresh: true,
+      promoted: false
     };
   }
 
+  function makeFolder(name, colour, tabId, sortOrder) {
+    return {
+      id: makeId('folder_'), name,
+      color: colour || '#6B4FBB',
+      collapsed: false,
+      sortOrder: sortOrder || 0,
+      tabId: tabId || null
+    };
+  }
+
+  function makeTab(name, colour) {
+    return { id: `tab_${Date.now()}`, name, color: colour || '#6B4FBB' };
+  }
+
+  // ── Warning detection ────────────────────────────────────────
+  function pushWarning(treeNode, type) {
+    const depth = subtreeDepth(treeNode);
+    if (type === 'tab'     && depth > 4) return 'This node has more than 4 levels. Items deeper than Tab → Folder → Project → Step will be added as extra steps on their nearest project.';
+    if (type === 'folder'  && depth > 3) return 'This node has more than 3 levels. Items deeper than Folder → Project → Step will be added as extra steps on their nearest project.';
+    if (type === 'project' && depth > 1) return 'Nested items will all appear as steps within this project.';
+    return null;
+  }
+
+  // ── Push functions ───────────────────────────────────────────
   function pushAsLaunch(nodeId) {
-    // Single task only — no children
     const node = flatNodes.find(n => n.id === nodeId);
     if (!node) return;
-    const { horizon, folders } = getFEData();
-    saveFEData([...horizon, makeHorizonItem(node.label, 'task', '')], folders);
-    setPushFeedback('Launched to Focus Engine');
+    const fe = getFEData();
+    fe.horizon = [...fe.horizon, makeHorizonItem(node.label, 'task', null)];
+    saveFEData(fe);
+    setPushFeedback('Launched in Focus Engine');
     setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 1800);
   }
 
-  function pushAsHorizonItem(nodeId, type) {
+  function pushAsType(nodeId, type) {
     const treeNode = findTreeNode(blueprint.nodes, nodeId);
     const displayNode = flatNodes.find(n => n.id === nodeId);
     if (!treeNode || !displayNode) return;
-    const { horizon, folders } = getFEData();
-    const children = treeNode.children || [];
+    const fe = getFEData();
     const colour = displayNode.colour || '#6B4FBB';
+    const newHorizon = [...fe.horizon];
+    const newFolders = [...fe.folders];
+    const newTabs = [...fe.tabs];
+    let msg = '';
 
     if (type === 'task') {
-      // Single task, no children pulled in
-      saveFEData([...horizon, makeHorizonItem(treeNode.label, 'task', '')], folders);
-      setPushFeedback('Added as Task in Horizon');
+      // ── Task: node only ──
+      newHorizon.push(makeHorizonItem(treeNode.label, 'task', null));
+      msg = 'Added as Task';
 
     } else if (type === 'project') {
-      // Node = project; children = chunks (sub-tasks) on that project
-      const chunks = children.map(c => makeChunk(c.label));
-      const project = makeHorizonItem(treeNode.label, 'project', '', chunks);
-      saveFEData([...horizon, project], folders);
-      const childCount = children.length;
-      setPushFeedback(childCount > 0
-        ? `Project + ${childCount} sub-task${childCount > 1 ? 's' : ''} added`
-        : 'Added as Project in Horizon');
+      // ── Project: node + ALL descendants flattened as chunks ──
+      const allDesc = collectDescendants(treeNode, '');
+      const chunks = allDesc.map((l, i) => makeChunk(l, i));
+      newHorizon.push(makeHorizonItem(treeNode.label, 'project', null, chunks));
+      msg = chunks.length > 0 ? `Project + ${chunks.length} step${chunks.length > 1 ? 's' : ''}` : 'Added as Project';
 
     } else if (type === 'folder') {
-      // Node = folder
-      // Children = projects inside that folder, each with grandchildren as their chunks
-      const folder = {
-        id: makeId('folder_'),
-        name: treeNode.label,
-        color: colour,
-        collapsed: false,
-        sortOrder: folders.length
-      };
-      const newItems = children.map(child => {
-        const chunks = (child.children || []).map(gc => makeChunk(gc.label));
-        return makeHorizonItem(child.label, 'project', folder.id, chunks);
+      // ── Folder: node = folder, children = projects, grandchildren = chunks ──
+      // Great-grandchildren+ appended as extra chunks with prefix context
+      const folder = makeFolder(treeNode.label, colour, null, newFolders.length);
+      newFolders.push(folder);
+      let chunkCount = 0;
+      (treeNode.children || []).forEach(child => {
+        const directChunks = (child.children || []).map((gc, i) => makeChunk(gc.label, i));
+        // Great-grandchildren: flatten with prefix onto this project
+        let extra = [];
+        (child.children || []).forEach(gc => {
+          (gc.children || []).forEach((ggc, i) => {
+            extra.push(makeChunk(`${gc.label} › ${ggc.label}`, directChunks.length + extra.length + i));
+          });
+        });
+        const allChunks = [...directChunks, ...extra];
+        chunkCount += allChunks.length;
+        newHorizon.push(makeHorizonItem(child.label, 'project', folder.id, allChunks));
       });
-      saveFEData([...horizon, ...newItems], [...folders, folder]);
-      const projectCount = children.length;
-      const taskCount = children.reduce((s, c) => s + (c.children || []).length, 0);
-      let msg = projectCount > 0
-        ? `Folder + ${projectCount} project${projectCount > 1 ? 's' : ''}`
-        : 'Folder added to Horizon';
-      if (taskCount > 0) msg += ` + ${taskCount} sub-task${taskCount > 1 ? 's' : ''}`;
-      setPushFeedback(msg);
+      const pc = (treeNode.children || []).length;
+      msg = pc > 0 ? `Folder + ${pc} project${pc > 1 ? 's' : ''} + ${chunkCount} step${chunkCount !== 1 ? 's' : ''}` : 'Added as Folder';
+
+    } else if (type === 'tab') {
+      // ── Tab: node = tab, children = folders, grandchildren = projects, great-grandchildren = chunks ──
+      // Depth 5+ flattened as extra chunks
+      const tab = makeTab(treeNode.label, colour);
+      newTabs.push(tab);
+      let folderCount = 0, projectCount = 0, chunkCount = 0;
+      (treeNode.children || []).forEach(child => {
+        const folder = makeFolder(child.label, colour, tab.id, newFolders.length + folderCount);
+        newFolders.push(folder);
+        folderCount++;
+        (child.children || []).forEach(gc => {
+          const directChunks = (gc.children || []).map((ggc, i) => makeChunk(ggc.label, i));
+          let extra = [];
+          (gc.children || []).forEach(ggc => {
+            (ggc.children || []).forEach((d5, i) => {
+              extra.push(makeChunk(`${ggc.label} › ${d5.label}`, directChunks.length + extra.length + i));
+            });
+          });
+          const allChunks = [...directChunks, ...extra];
+          chunkCount += allChunks.length;
+          newHorizon.push(makeHorizonItem(gc.label, 'project', folder.id, allChunks));
+          projectCount++;
+        });
+      });
+      msg = `Tab + ${folderCount} folder${folderCount !== 1 ? 's' : ''} + ${projectCount} project${projectCount !== 1 ? 's' : ''} + ${chunkCount} step${chunkCount !== 1 ? 's' : ''}`;
     }
 
-    setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 2200);
+    saveFEData({ horizon: newHorizon, folders: newFolders, tabs: newTabs });
+    setPushFeedback(msg);
+    setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 2500);
   }
 
   async function handleAddChild() {
@@ -2060,7 +2125,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
             const col = parentNode.displayColour || parentNode.colour;
             const fullCol = parentNode.colour;
             const iy = parentNode.y + nodeRadius(parentNode.label, parentNode.depth) + 28;
-            const foHeight = pushStage === 'horizon' ? 180 : pushStage === 'choice' ? 130 : 100;
+            const foHeight = pushStage === 'choice' ? 210 : ['warn-project','warn-folder','warn-tab'].includes(pushStage) ? 160 : 100;
             return (
               <foreignObject
                 x={parentNode.x - 130} y={iy}
@@ -2095,60 +2160,96 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                 </div>
 
                 {/* Push to Focus Engine box */}
-                {pushFeedback ? (
-                  <div style={{
-                    background:'rgba(11,191,191,0.15)', border:'1.5px solid var(--teal)',
-                    borderRadius:10, padding:'8px 12px', textAlign:'center',
-                    fontFamily:'Montserrat,sans-serif', fontSize:11, fontWeight:700,
-                    color:'var(--teal)', letterSpacing:'0.5px'
-                  }}>{pushFeedback}</div>
-                ) : pushStage === null ? (
-                  <div
-                    onClick={() => { setPushStage('choice'); setPushNodeId(addingTo); }}
-                    style={{
-                      background:'rgba(18,15,42,0.97)', border:`1.5px solid rgba(107,79,187,0.5)`,
-                      borderRadius:10, padding:'8px 12px', cursor:'pointer',
-                      fontFamily:'Montserrat,sans-serif', fontSize:10, fontWeight:700,
-                      color:'var(--purple-light)', letterSpacing:'1.5px', textTransform:'uppercase',
-                      textAlign:'center', transition:'border-color 0.2s'
-                    }}
-                  >→ Push to Focus Engine</div>
-                ) : pushStage === 'choice' ? (
-                  <div style={{
-                    background:'rgba(18,15,42,0.97)', border:`1.5px solid ${fullCol}`,
-                    borderRadius:10, padding:'10px 12px',
-                    fontFamily:'Montserrat,sans-serif'
-                  }}>
-                    <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)', marginBottom:8}}>Push as</div>
-                    <div style={{display:'flex', gap:6}}>
-                      <span
-                        onClick={() => pushAsLaunch(pushNodeId)}
-                        style={{flex:1, background:fullCol, color:'#0D0A1A', borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase'}}
-                      >Launch</span>
-                      <span
-                        onClick={() => setPushStage('horizon')}
-                        style={{flex:1, background:'transparent', color:fullCol, border:`1px solid ${fullCol}`, borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase'}}
-                      >Horizon</span>
+                {(() => {
+                  const treeNode = pushNodeId ? findTreeNode(blueprint.nodes, pushNodeId) : null;
+                  return pushFeedback ? (
+                    <div style={{
+                      background:'rgba(11,191,191,0.15)', border:'1.5px solid var(--teal)',
+                      borderRadius:10, padding:'8px 12px', textAlign:'center',
+                      fontFamily:'Montserrat,sans-serif', fontSize:11, fontWeight:700,
+                      color:'var(--teal)', letterSpacing:'0.5px'
+                    }}>{pushFeedback}</div>
+                  ) : pushStage === null ? (
+                    <div
+                      onClick={() => { setPushStage('choice'); setPushNodeId(addingTo); }}
+                      style={{
+                        background:'rgba(18,15,42,0.97)', border:'1.5px solid rgba(107,79,187,0.5)',
+                        borderRadius:10, padding:'8px 12px', cursor:'pointer',
+                        fontFamily:'Montserrat,sans-serif', fontSize:10, fontWeight:700,
+                        color:'var(--purple-light)', letterSpacing:'1.5px', textTransform:'uppercase',
+                        textAlign:'center'
+                      }}
+                    >→ Push to Focus Engine</div>
+                  ) : pushStage === 'choice' ? (
+                    <div style={{
+                      background:'rgba(18,15,42,0.97)', border:`1.5px solid ${fullCol}`,
+                      borderRadius:10, padding:'10px 12px', fontFamily:'Montserrat,sans-serif'
+                    }}>
+                      <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+                        <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)'}}>Push to Focus Engine as</div>
+                        <span onClick={() => setPushStage(null)} style={{color:'var(--text-faint)', cursor:'pointer', fontSize:11}}>✕</span>
+                      </div>
+                      {/* Warning if deep structure */}
+                      {treeNode && subtreeDepth(treeNode) > 3 && (
+                        <div style={{fontSize:9, color:'#F0B429', marginBottom:8, lineHeight:1.4, fontFamily:'Montserrat,sans-serif', fontWeight:600}}>
+                          ⚠ Deep structure detected. Only 4 levels max will map to Focus Engine.
+                        </div>
+                      )}
+                      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:5}}>
+                        {[
+                          {label:'Launch', desc:'Brain dump', action: () => pushAsLaunch(pushNodeId), solid:true},
+                          {label:'Task',   desc:'Single item',   action: () => pushAsType(pushNodeId,'task')},
+                          {label:'Project',desc:'+ steps',       action: () => {
+                            const w = treeNode ? pushWarning(treeNode,'project') : null;
+                            if (w) { setPushStage('warn-project'); } else { pushAsType(pushNodeId,'project'); }
+                          }},
+                          {label:'Folder', desc:'+ projects',    action: () => {
+                            const w = treeNode ? pushWarning(treeNode,'folder') : null;
+                            if (w) { setPushStage('warn-folder'); } else { pushAsType(pushNodeId,'folder'); }
+                          }},
+                          {label:'Tab',    desc:'Full hierarchy', action: () => {
+                            const w = treeNode ? pushWarning(treeNode,'tab') : null;
+                            if (w) { setPushStage('warn-tab'); } else { pushAsType(pushNodeId,'tab'); }
+                          }, wide:true},
+                        ].map(opt => (
+                          <div key={opt.label}
+                            onClick={opt.action}
+                            style={{
+                              gridColumn: opt.wide ? 'span 2' : 'span 1',
+                              background: opt.solid ? fullCol : 'transparent',
+                              color: opt.solid ? '#0D0A1A' : fullCol,
+                              border: `1px solid ${fullCol}`,
+                              borderRadius:7, padding:'6px 8px', cursor:'pointer',
+                              textAlign:'center'
+                            }}
+                          >
+                            <div style={{fontSize:10, fontWeight:900, letterSpacing:'0.5px', textTransform:'uppercase', fontFamily:'Montserrat,sans-serif'}}>{opt.label}</div>
+                            <div style={{fontSize:8, opacity:0.7, fontFamily:'Montserrat,sans-serif', fontWeight:600}}>{opt.desc}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ) : pushStage === 'horizon' ? (
-                  <div style={{
-                    background:'rgba(18,15,42,0.97)', border:`1.5px solid ${fullCol}`,
-                    borderRadius:10, padding:'10px 12px',
-                    fontFamily:'Montserrat,sans-serif'
-                  }}>
-                    <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)', marginBottom:8}}>Add to Horizon as</div>
-                    <div style={{display:'flex', gap:6}}>
-                      {['Task','Project','Folder'].map(t => (
+                  ) : ['warn-project','warn-folder','warn-tab'].includes(pushStage) ? (
+                    <div style={{
+                      background:'rgba(18,15,42,0.97)', border:`1.5px solid #F0B429`,
+                      borderRadius:10, padding:'10px 12px', fontFamily:'Montserrat,sans-serif'
+                    }}>
+                      <div style={{fontSize:9, fontWeight:700, color:'#F0B429', marginBottom:8, lineHeight:1.5}}>
+                        {treeNode ? pushWarning(treeNode, pushStage.replace('warn-','')) : ''}
+                      </div>
+                      <div style={{display:'flex', gap:6}}>
                         <span
-                          key={t}
-                          onClick={() => pushAsHorizonItem(pushNodeId, t.toLowerCase())}
-                          style={{flex:1, background:'transparent', color:fullCol, border:`1px solid ${fullCol}`, borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:900, letterSpacing:'0.5px', textTransform:'uppercase'}}
-                        >{t}</span>
-                      ))}
+                          onClick={() => pushAsType(pushNodeId, pushStage.replace('warn-',''))}
+                          style={{flex:1, background:fullCol, color:'#0D0A1A', borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase', fontFamily:'Montserrat,sans-serif'}}
+                        >Continue</span>
+                        <span
+                          onClick={() => setPushStage('choice')}
+                          style={{flex:1, background:'transparent', color:'var(--text-dim)', border:'1px solid var(--border)', borderRadius:7, padding:'7px 0', textAlign:'center', cursor:'pointer', fontSize:10, fontWeight:700, textTransform:'uppercase', fontFamily:'Montserrat,sans-serif'}}
+                        >Back</span>
+                      </div>
                     </div>
-                  </div>
-                ) : null}
+                  ) : null;
+                })()}
               </foreignObject>
             );
           })()}
