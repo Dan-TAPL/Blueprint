@@ -2696,7 +2696,7 @@ function MapView({ blueprint, onBack, onUpdateBlueprint }) {
 }
 
 // ── Blueprint dashboard ───────────────────────────────────────
-function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore }) {
+function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates }) {
   return (
     <div className="dashboard-screen">
       <div className="dashboard-heading">Your Blueprints</div>
@@ -2722,24 +2722,6 @@ function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore }) {
         >
           ◈ Templates
         </button>
-        {onRestore && (
-          <button
-            onClick={onRestore}
-            style={{
-              background:'transparent',
-              border:'1px solid var(--text-faint)',
-              borderRadius:12, padding:'14px 18px',
-              fontFamily:'Montserrat,sans-serif', fontSize:10, fontWeight:700,
-              letterSpacing:'1.5px', textTransform:'uppercase',
-              color:'var(--text-dim)', cursor:'pointer',
-              transition:'all 0.2s'
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color='var(--text)'; e.currentTarget.style.borderColor='var(--text-mid)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color='var(--text-dim)'; e.currentTarget.style.borderColor='var(--text-faint)'; }}
-          >
-            ↻ Restore from cloud
-          </button>
-        )}
 
       </div>
 
@@ -3025,15 +3007,6 @@ function BlueprintApp({ userEmail, userPath }) {
           setBlueprintMaps(updated);
           lsSet('tapl-blueprint-maps', updated);
           try { await saveToFirebase(userPath); } catch(e) {}
-        }}
-        onRestore={async () => {
-          setAppState('loading');
-          try {
-            await loadFromFirebase(userPath);
-            const maps = ls('tapl-blueprint-maps', []);
-            setBlueprintMaps(maps);
-          } catch(e) {}
-          setAppState('dashboard');
         }}
 
       />
