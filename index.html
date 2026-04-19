@@ -1147,9 +1147,12 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   const [editMode, setEditMode] = React.useState(false);
   const [addingTo, setAddingTo] = React.useState(null); // nodeId we're adding child to
   const [newLabel, setNewLabel] = React.useState('');
-  const [pushStage, setPushStage] = React.useState(null); // null | 'choice' | 'horizon'
+  const [pushStage, setPushStage] = React.useState(null);
   const [pushNodeId, setPushNodeId] = React.useState(null);
   const [pushFeedback, setPushFeedback] = React.useState(null);
+  const [pushTargetTabId, setPushTargetTabId] = React.useState(null);
+  const [pushTargetFolderId, setPushTargetFolderId] = React.useState(null);
+  const [pendingPushType, setPendingPushType] = React.useState(null);
   const [addingRoot, setAddingRoot] = React.useState(false);
   const [rootLabel, setRootLabel] = React.useState('');
   const [showWhy, setShowWhy] = React.useState(false);
@@ -1586,49 +1589,67 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     return null;
   }
 
+  // ── Tab/folder resolution ────────────────────────────────────
+  // Returns { tab, fe } — finds or creates the Blueprint tab
+  function resolveOrCreateBlueprintTab(fe) {
+    let tab = fe.tabs.find(t => t.name === 'Blueprint');
+    if (!tab) {
+      tab = makeTab('Blueprint', '#6B4FBB');
+      fe.tabs = [...fe.tabs, tab];
+    }
+    return { tab, fe };
+  }
+
+  // Returns { folder, fe } — finds or creates a "Blueprint" folder inside a tab
+  function resolveOrCreateBlueprintFolder(fe, tabId, colour) {
+    let folder = fe.folders.find(f => f.tabId === tabId && f.name === 'Blueprint');
+    if (!folder) {
+      folder = makeFolder('Blueprint', colour || '#6B4FBB', tabId, fe.folders.length);
+      fe.folders = [...fe.folders, folder];
+    }
+    return { folder, fe };
+  }
+
   // ── Push functions ───────────────────────────────────────────
   function pushAsLaunch(nodeId) {
     const node = flatNodes.find(n => n.id === nodeId);
     if (!node) return;
-    const fe = getFEData();
-    fe.horizon = [...fe.horizon, makeHorizonItem(node.label, 'task', null)];
+    // Launch = ungrouped task — goes into Blueprint tab > Blueprint folder
+    let fe = getFEData();
+    const { tab } = resolveOrCreateBlueprintTab(fe);
+    const { folder } = resolveOrCreateBlueprintFolder(fe, tab.id, node.colour);
+    fe.horizon = [...fe.horizon, makeHorizonItem(node.label, 'task', folder.id)];
     saveFEData(fe);
     setPushFeedback('Launched in Focus Engine');
     setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 1800);
   }
 
-  function pushAsType(nodeId, type) {
+  // Called after folder destination is resolved
+  function executePush(nodeId, type, targetFolderId, fe) {
     const treeNode = findTreeNode(blueprint.nodes, nodeId);
     const displayNode = flatNodes.find(n => n.id === nodeId);
     if (!treeNode || !displayNode) return;
-    const fe = getFEData();
     const colour = displayNode.colour || '#6B4FBB';
-    const newHorizon = [...fe.horizon];
-    const newFolders = [...fe.folders];
-    const newTabs = [...fe.tabs];
     let msg = '';
 
     if (type === 'task') {
-      // ── Task: node only ──
-      newHorizon.push(makeHorizonItem(treeNode.label, 'task', null));
+      fe.horizon = [...fe.horizon, makeHorizonItem(treeNode.label, 'task', targetFolderId)];
       msg = 'Added as Task';
 
     } else if (type === 'project') {
-      // ── Project: node + ALL descendants flattened as chunks ──
       const allDesc = collectDescendants(treeNode, '');
       const chunks = allDesc.map((l, i) => makeChunk(l, i));
-      newHorizon.push(makeHorizonItem(treeNode.label, 'project', null, chunks));
+      fe.horizon = [...fe.horizon, makeHorizonItem(treeNode.label, 'project', targetFolderId, chunks)];
       msg = chunks.length > 0 ? `Project + ${chunks.length} step${chunks.length > 1 ? 's' : ''}` : 'Added as Project';
 
     } else if (type === 'folder') {
-      // ── Folder: node = folder, children = projects, grandchildren = chunks ──
-      // Great-grandchildren+ appended as extra chunks with prefix context
-      const folder = makeFolder(treeNode.label, colour, null, newFolders.length);
-      newFolders.push(folder);
+      // Creates a new folder inside the target tab
+      const folder = makeFolder(treeNode.label, colour, pushTargetTabId, fe.folders.length);
+      fe.folders = [...fe.folders, folder];
       let chunkCount = 0;
+      const newItems = [];
       (treeNode.children || []).forEach(child => {
         const directChunks = (child.children || []).map((gc, i) => makeChunk(gc.label, i));
-        // Great-grandchildren: flatten with prefix onto this project
         let extra = [];
         (child.children || []).forEach(gc => {
           (gc.children || []).forEach((ggc, i) => {
@@ -1637,20 +1658,19 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
         });
         const allChunks = [...directChunks, ...extra];
         chunkCount += allChunks.length;
-        newHorizon.push(makeHorizonItem(child.label, 'project', folder.id, allChunks));
+        newItems.push(makeHorizonItem(child.label, 'project', folder.id, allChunks));
       });
+      fe.horizon = [...fe.horizon, ...newItems];
       const pc = (treeNode.children || []).length;
       msg = pc > 0 ? `Folder + ${pc} project${pc > 1 ? 's' : ''} + ${chunkCount} step${chunkCount !== 1 ? 's' : ''}` : 'Added as Folder';
 
     } else if (type === 'tab') {
-      // ── Tab: node = tab, children = folders, grandchildren = projects, great-grandchildren = chunks ──
-      // Depth 5+ flattened as extra chunks
       const tab = makeTab(treeNode.label, colour);
-      newTabs.push(tab);
+      fe.tabs = [...fe.tabs, tab];
       let folderCount = 0, projectCount = 0, chunkCount = 0;
       (treeNode.children || []).forEach(child => {
-        const folder = makeFolder(child.label, colour, tab.id, newFolders.length + folderCount);
-        newFolders.push(folder);
+        const folder = makeFolder(child.label, colour, tab.id, fe.folders.length + folderCount);
+        fe.folders = [...fe.folders, folder];
         folderCount++;
         (child.children || []).forEach(gc => {
           const directChunks = (gc.children || []).map((ggc, i) => makeChunk(ggc.label, i));
@@ -1662,16 +1682,51 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
           });
           const allChunks = [...directChunks, ...extra];
           chunkCount += allChunks.length;
-          newHorizon.push(makeHorizonItem(gc.label, 'project', folder.id, allChunks));
+          fe.horizon = [...fe.horizon, makeHorizonItem(gc.label, 'project', folder.id, allChunks)];
           projectCount++;
         });
       });
       msg = `Tab + ${folderCount} folder${folderCount !== 1 ? 's' : ''} + ${projectCount} project${projectCount !== 1 ? 's' : ''} + ${chunkCount} step${chunkCount !== 1 ? 's' : ''}`;
     }
 
-    saveFEData({ horizon: newHorizon, folders: newFolders, tabs: newTabs });
+    saveFEData(fe);
     setPushFeedback(msg);
-    setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); }, 2500);
+    setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); setPushTargetTabId(null); setPushTargetFolderId(null); setPendingPushType(null); }, 2500);
+  }
+
+  function pushAsType(nodeId, type) {
+    // Tab push: always creates its own tab, no routing needed
+    if (type === 'tab') {
+      const fe = getFEData();
+      executePush(nodeId, 'tab', null, fe);
+      return;
+    }
+    // All other types: route through Blueprint tab logic
+    const fe = getFEData();
+    const blueprintTab = fe.tabs.find(t => t.name === 'Blueprint');
+
+    if (!blueprintTab) {
+      // No Blueprint tab — create it + default Blueprint folder, push straight in
+      const { tab, fe: fe2 } = resolveOrCreateBlueprintTab(fe);
+      const displayNode = flatNodes.find(n => n.id === nodeId);
+      const colour = displayNode ? displayNode.colour : '#6B4FBB';
+      if (type === 'folder') {
+        // Folder becomes its own folder inside Blueprint tab — no extra folder needed
+        setPushTargetTabId(tab.id);
+        setPushTargetFolderId(null);
+        executePush(nodeId, 'folder', null, fe2);
+      } else {
+        // Task/project — put in Blueprint folder inside Blueprint tab
+        const { folder, fe: fe3 } = resolveOrCreateBlueprintFolder(fe2, tab.id, colour);
+        setPushTargetTabId(tab.id);
+        executePush(nodeId, type, folder.id, fe3);
+      }
+    } else {
+      // Blueprint tab exists — show folder picker
+      setPushTargetTabId(blueprintTab.id);
+      setPendingPushType(type);
+      setPushStage('folder-pick');
+    }
   }
 
   async function handleAddChild() {
@@ -2125,7 +2180,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
             const col = parentNode.displayColour || parentNode.colour;
             const fullCol = parentNode.colour;
             const iy = parentNode.y + nodeRadius(parentNode.label, parentNode.depth) + 28;
-            const foHeight = pushStage === 'choice' ? 210 : ['warn-project','warn-folder','warn-tab'].includes(pushStage) ? 160 : 100;
+            const foHeight = pushStage === 'choice' ? 210 : ['warn-project','warn-folder','warn-tab'].includes(pushStage) ? 160 : pushStage === 'folder-pick' ? 220 : 100;
             return (
               <foreignObject
                 x={parentNode.x - 130} y={iy}
@@ -2248,6 +2303,71 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                         >Back</span>
                       </div>
                     </div>
+                  ) : pushStage === 'folder-pick' ? (
+                    // Blueprint tab exists — pick folder destination
+                    (() => {
+                      const fe = getFEData();
+                      const tabFolders = fe.folders.filter(f => f.tabId === pushTargetTabId);
+                      const displayNode = flatNodes.find(n => n.id === pushNodeId);
+                      const col2 = displayNode ? (displayNode.displayColour || displayNode.colour) : fullCol;
+                      const fullCol2 = displayNode ? displayNode.colour : fullCol;
+                      return (
+                        <div style={{
+                          background:'rgba(18,15,42,0.97)', border:`1.5px solid ${fullCol2}`,
+                          borderRadius:10, padding:'10px 12px', fontFamily:'Montserrat,sans-serif'
+                        }}>
+                          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
+                            <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)'}}>Add to Blueprint tab as</div>
+                            <span onClick={() => setPushStage('choice')} style={{color:'var(--text-faint)', cursor:'pointer', fontSize:11}}>✕</span>
+                          </div>
+                          {/* Option 1: Generic Blueprint folder */}
+                          <div
+                            onClick={() => {
+                              const fe2 = getFEData();
+                              const colour = displayNode ? displayNode.colour : '#6B4FBB';
+                              if (pendingPushType === 'folder') {
+                                executePush(pushNodeId, 'folder', null, fe2);
+                              } else {
+                                const { folder, fe: fe3 } = resolveOrCreateBlueprintFolder(fe2, pushTargetTabId, colour);
+                                executePush(pushNodeId, pendingPushType, folder.id, fe3);
+                              }
+                            }}
+                            style={{
+                              background:'rgba(107,79,187,0.15)', border:'1px solid var(--purple-light)',
+                              borderRadius:8, padding:'8px 10px', cursor:'pointer', marginBottom:6
+                            }}
+                          >
+                            <div style={{fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase', color:'var(--purple-light)'}}>Blueprint folder</div>
+                            <div style={{fontSize:9, color:'var(--text-dim)', marginTop:2}}>Generic folder inside Blueprint tab</div>
+                          </div>
+                          {/* Existing folders */}
+                          {tabFolders.length > 0 && (
+                            <>
+                              <div style={{fontSize:9, fontWeight:700, color:'var(--text-faint)', letterSpacing:'1px', textTransform:'uppercase', marginBottom:5, marginTop:4}}>Or existing folder</div>
+                              <div style={{maxHeight:90, overflowY:'auto', display:'flex', flexDirection:'column', gap:4}}>
+                                {tabFolders.map(f => (
+                                  <div
+                                    key={f.id}
+                                    onClick={() => {
+                                      const fe2 = getFEData();
+                                      executePush(pushNodeId, pendingPushType, f.id, fe2);
+                                    }}
+                                    style={{
+                                      background:'rgba(18,15,42,0.97)', border:`1px solid ${f.color || 'var(--border)'}`,
+                                      borderRadius:8, padding:'7px 10px', cursor:'pointer',
+                                      display:'flex', alignItems:'center', gap:8
+                                    }}
+                                  >
+                                    <div style={{width:8, height:8, borderRadius:'50%', background: f.color || 'var(--border)', flexShrink:0}}/>
+                                    <span style={{fontSize:11, fontWeight:700, color:'var(--text)', textTransform:'uppercase', letterSpacing:'0.5px'}}>{f.name}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })()
                   ) : null;
                 })()}
               </foreignObject>
