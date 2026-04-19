@@ -1963,16 +1963,24 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                     </>
                   );
                 })()}
-                {/* Hold progress ring */}
-                {isHolding && (
-                  <circle cx={0} cy={0} r={R + 4}
-                    fill="none" stroke={col} strokeWidth="2.5"
-                    strokeDasharray={`${holdDash} ${holdCircumference}`}
-                    strokeLinecap="round"
-                    transform="rotate(-90 0 0)"
-                    opacity="0.9"
-                  />
-                )}
+                {/* Hold progress ring — CSS animated */}
+                {isHolding && (() => {
+                  const circ = 2 * Math.PI * (R + 4);
+                  return (
+                    <circle cx={0} cy={0} r={R + 4}
+                      fill="none" stroke={col} strokeWidth="2.5"
+                      strokeDasharray={circ}
+                      strokeDashoffset={circ}
+                      strokeLinecap="round"
+                      transform="rotate(-90 0 0)"
+                      opacity="0.9"
+                      style={{
+                        '--ring-circ': circ,
+                        animation: `holdRingFill ${HOLD_MS}ms linear forwards`
+                      }}
+                    />
+                  );
+                })()}
                 {/* Label */}
                 {labelLines.map((ln, li) => (
                   <text key={li}
@@ -2044,7 +2052,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                 onPointerUp={e => {
                   e.stopPropagation();
                   clearTimeout(rootDelayTimer.current);
-                  clearInterval(holdInterval.current);
+                  clearTimeout(holdInterval.current);
                   holdInterval.current = null;
                   setHoldNodeId(null);
                                     if (addingRootActive.current) return;
@@ -2054,7 +2062,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                 }}
                 onPointerLeave={e => {
                   clearTimeout(rootDelayTimer.current);
-                  clearInterval(holdInterval.current);
+                  clearTimeout(holdInterval.current);
                   holdInterval.current = null;
                   setHoldNodeId(null);
                                   }}
@@ -2111,7 +2119,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                       e.stopPropagation();
                       // Cancel any hold in progress, then open rename
                       clearTimeout(rootDelayTimer.current);
-                      clearInterval(holdInterval.current);
+                      clearTimeout(holdInterval.current);
                       holdInterval.current = null;
                       setHoldNodeId(null);
                                             setRenamingRoot(true);
