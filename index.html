@@ -588,7 +588,7 @@ const FIREBASE_CONFIG = {
 // ── Cloud keys ───────────────────────────────────────────────
 const CLOUD_KEYS = [
   'tapl-tasks', 'tapl-blocks', 'tapl-session-start', 'tapl-session-end',
-  'tapl-horizon', 'tapl-hz-folders', 'tapl-completed-tasks',
+  'tapl-horizon', 'tapl-hz-folders', 'tapl-hz-tabs', 'tapl-completed-tasks',
   'tapl-skipped-tasks', 'tapl-theme',
   'tapl-blueprint-maps', 'tapl-blueprint-theme'
 ];
@@ -1321,13 +1321,28 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   const flatEdges = flattenEdges(laid);
 
   // ── Repulsion pass — push overlapping nodes apart ──────────
-  // Run multiple iterations until stable or max reached
-  // Each node has a radius; minimum gap between any two node edges = MIN_GAP
-  const MIN_GAP = 14; // px between circle edges
-  const MAX_ITER = 80;
-  const DAMPING = 0.5;
+  // Key rules:
+  // 1. Same-domain nodes never repel each other (layout handles sibling spacing)
+  // 2. Cross-domain repulsion pushes along the radial axis from map centre,
+  //    keeping each domain's cluster intact rather than scattering nodes randomly
+  const MIN_GAP = 18;
+  const MAX_ITER = 120;
+  const DAMPING = 0.45;
 
-  // Build a mutable positions map keyed by node id
+  // Map each node to its root domain id for same-domain detection
+  const domainOf = {};
+  flatNodes.forEach(n => {
+    if (n.depth === 0) domainOf[n.id] = n.id;
+    else {
+      // Walk up via parentId to find depth-0 ancestor
+      let cur = n;
+      while (cur && cur.depth > 0) {
+        cur = flatNodes.find(p => p.id === cur.parentId);
+      }
+      domainOf[n.id] = cur ? cur.id : n.id;
+    }
+  });
+
   const positions = {};
   flatNodes.forEach(n => { positions[n.id] = { x: n.x, y: n.y }; });
 
@@ -1337,6 +1352,8 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
       for (let j = i + 1; j < flatNodes.length; j++) {
         const a = flatNodes[i];
         const b = flatNodes[j];
+        // Skip nodes that belong to the same domain — don't scatter siblings
+        if (domainOf[a.id] === domainOf[b.id]) continue;
         const pa = positions[a.id];
         const pb = positions[b.id];
         const rA = nodeRadius(a.label, a.depth);
@@ -1347,21 +1364,34 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
         const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
         if (dist < minDist) {
           const overlap = (minDist - dist) * DAMPING;
-          const nx = dx / dist;
-          const ny = dy / dist;
-          // Push both nodes apart equally, but anchor depth-0 nodes more strongly
-          // (children move more, parents move less)
-          const wA = a.depth === 0 ? 0.3 : 0.5;
-          const wB = b.depth === 0 ? 0.3 : 0.5;
-          pa.x -= nx * overlap * wA;
-          pa.y -= ny * overlap * wA;
-          pb.x += nx * overlap * wB;
-          pb.y += ny * overlap * wB;
+          // Push direction: radially outward from map centre for each node
+          // This keeps domain clusters together by pushing whole groups apart
+          const axA = pa.x - cx;
+          const ayA = pa.y - cy;
+          const lenA = Math.sqrt(axA*axA + ayA*ayA) || 0.001;
+          const axB = pb.x - cx;
+          const ayB = pb.y - cy;
+          const lenB = Math.sqrt(axB*axB + ayB*ayB) || 0.001;
+          // Blend radial direction with direct separation direction for stability
+          const blend = 0.7;
+          const nxAB = dx / dist;
+          const nyAB = dy / dist;
+          const rxA = -(axA/lenA * blend + (-nxAB) * (1-blend));
+          const ryA = -(ayA/lenA * blend + (-nyAB) * (1-blend));
+          const rxB =  (axB/lenB * blend + nxAB   * (1-blend));
+          const ryB =  (ayB/lenB * blend + nyAB   * (1-blend));
+          // Depth-0 nodes move less — they anchor their cluster
+          const wA = a.depth === 0 ? 0.25 : 0.55;
+          const wB = b.depth === 0 ? 0.25 : 0.55;
+          pa.x += rxA * overlap * wA;
+          pa.y += ryA * overlap * wA;
+          pb.x += rxB * overlap * wB;
+          pb.y += ryB * overlap * wB;
           maxMove = Math.max(maxMove, overlap);
         }
       }
     }
-    if (maxMove < 0.5) break; // converged
+    if (maxMove < 0.5) break;
   }
 
   // Apply repulsed positions back to flatNodes
