@@ -556,19 +556,6 @@ body::after {
 }
 .btn-add-small:hover:not(:disabled) { opacity: 0.85; }
 .btn-add-small:disabled { opacity: 0.3; cursor: not-allowed; }
-.add-domain-panel {
-  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; align-items: center; z-index: 10;
-  background: var(--card); border: 1px solid var(--border);
-  border-radius: 14px; padding: 12px 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-}
-.add-domain-input {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 14px; font-family: 'Montserrat', sans-serif; font-size: 13px;
-  font-weight: 600; color: var(--text); outline: none; width: 200px; transition: border-color 0.2s;
-}
-.add-domain-input:focus { border-color: var(--purple-light); }
-.add-domain-input::placeholder { color: var(--text-faint); font-weight: 500; }
 .map-hint { position: absolute; top: 16px; right: 16px; font-size: 11px; color: var(--text-faint); font-weight: 600; letter-spacing: 0.5px; z-index: 10; }
 </style>
 </head>
@@ -701,7 +688,8 @@ async function saveToFirebase(userPath) {
     const raw = localStorage.getItem(k);
     if (raw !== null) { try { payload[k] = JSON.parse(raw); } catch(e) {} }
   });
-  await firebaseDb.ref(userPath + '/data').set(payload);
+  // Use update() not set() — only writes keys present in payload, never wipes others
+  await firebaseDb.ref(userPath + '/data').update(payload);
 }
 
 // ── OTP Input component ───────────────────────────────────────
@@ -1020,8 +1008,6 @@ function SummaryScreen({ answers, onConfirm, onEdit }) {
     </div>
   );
 }
-
-
 
 // ── Domain colours ────────────────────────────────────────────
 const DOMAIN_COLOURS = [
@@ -2153,8 +2139,6 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
             );
           })()}
 
-
-
           {/* Hold hint tooltip */}
           {holdNodeId && (
             <g style={{ pointerEvents:'none' }}>
@@ -2696,26 +2680,6 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
 }
 
 // ── Add node panel ────────────────────────────────────────────
-function AddNodePanel({ onAdd, maxReached }) {
-  const [val, setVal] = React.useState('');
-  const add = () => { if (val.trim() && !maxReached) { onAdd(val.trim()); setVal(''); } };
-  return (
-    <div className="add-domain-panel">
-      <span style={{fontSize:11,fontWeight:700,letterSpacing:'1.5px',textTransform:'uppercase',color:'var(--text-dim)',whiteSpace:'nowrap'}}>Add domain</span>
-      <input
-        className="add-domain-input"
-        placeholder={maxReached ? 'Max 20 domains' : 'e.g. Health, Work, Family...'}
-        value={val}
-        onChange={e => setVal(e.target.value)}
-        onKeyDown={e => { e.stopPropagation(); if (e.key==='Enter') add(); }}
-        onClick={e => e.stopPropagation()}
-        maxLength={30}
-        disabled={maxReached}
-      />
-      <button className="btn-add-small" onClick={e => { e.stopPropagation(); add(); }} disabled={!val.trim() || maxReached}>Add</button>
-    </div>
-  );
-}
 
 // ── Map view wrapper ─────────────────────────────────────────
 function MapView({ blueprint, onBack, onUpdateBlueprint }) {
@@ -2731,10 +2695,8 @@ function MapView({ blueprint, onBack, onUpdateBlueprint }) {
   );
 }
 
-
-
 // ── Blueprint dashboard ───────────────────────────────────────
-function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore, onDiagnose }) {
+function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore }) {
   return (
     <div className="dashboard-screen">
       <div className="dashboard-heading">Your Blueprints</div>
@@ -2778,21 +2740,7 @@ function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore, onDi
             ↻ Restore from cloud
           </button>
         )}
-        {onDiagnose && (
-          <button
-            onClick={onDiagnose}
-            style={{
-              background:'transparent',
-              border:'1px solid var(--accent)',
-              borderRadius:12, padding:'14px 18px',
-              fontFamily:'Montserrat,sans-serif', fontSize:10, fontWeight:700,
-              letterSpacing:'1.5px', textTransform:'uppercase',
-              color:'var(--accent)', cursor:'pointer'
-            }}
-          >
-            ⚑ Diagnose
-          </button>
-        )}
+
       </div>
 
       {maps.length === 0 ? (
@@ -2941,7 +2889,7 @@ function BlueprintApp({ userEmail, userPath }) {
         setBlueprintMaps(maps);
         setAppState('dashboard');
       } catch(e) {
-        console.error('Firebase load error:', e);
+        
         const maps = ls('tapl-blueprint-maps', []);
         setBlueprintMaps(maps);
         setAppState('dashboard');
@@ -2953,7 +2901,7 @@ function BlueprintApp({ userEmail, userPath }) {
   // Listen for Focus Engine data writes from Blueprint push actions
   useEffect(() => {
     async function handleFESync() {
-      try { await saveToFirebase(userPath); } catch(e) { console.error('FE sync error:', e); }
+      try { await saveToFirebase(userPath); } catch(e) {}
     }
     window.addEventListener('tapl-fe-sync', handleFESync);
     return () => window.removeEventListener('tapl-fe-sync', handleFESync);
@@ -2976,7 +2924,7 @@ function BlueprintApp({ userEmail, userPath }) {
     const updated = [...blueprintMaps, newMap];
     setBlueprintMaps(updated);
     lsSet('tapl-blueprint-maps', updated);
-    try { await saveToFirebase(userPath); } catch(e) { console.error('Save error:', e); }
+    try { await saveToFirebase(userPath); } catch(e) {}
     fireConfetti(3000);
     setAppState('dashboard');
     setPendingAnswers(null);
@@ -3023,7 +2971,7 @@ function BlueprintApp({ userEmail, userPath }) {
           const updated = [...blueprintMaps, newMap];
           setBlueprintMaps(updated);
           lsSet('tapl-blueprint-maps', updated);
-          try { await saveToFirebase(userPath); } catch(e) { console.error(e); }
+          try { await saveToFirebase(userPath); } catch(e) {}
           fireConfetti(2500);
           setAppState('dashboard');
         }}
@@ -3046,7 +2994,7 @@ function BlueprintApp({ userEmail, userPath }) {
     const newMaps = blueprintMaps.map(m => m.id === updated.id ? updated : m);
     setBlueprintMaps(newMaps);
     lsSet('tapl-blueprint-maps', newMaps);
-    try { await saveToFirebase(userPath); } catch(e) { console.error('Save error:', e); }
+    try { await saveToFirebase(userPath); } catch(e) {}
   };
 
   if (appState === 'map' && activeBlueprintId) {
@@ -3076,7 +3024,7 @@ function BlueprintApp({ userEmail, userPath }) {
           const updated = blueprintMaps.filter(m => m.id !== id);
           setBlueprintMaps(updated);
           lsSet('tapl-blueprint-maps', updated);
-          try { await saveToFirebase(userPath); } catch(e) { console.error(e); }
+          try { await saveToFirebase(userPath); } catch(e) {}
         }}
         onRestore={async () => {
           setAppState('loading');
@@ -3084,27 +3032,10 @@ function BlueprintApp({ userEmail, userPath }) {
             await loadFromFirebase(userPath);
             const maps = ls('tapl-blueprint-maps', []);
             setBlueprintMaps(maps);
-          } catch(e) { console.error('Restore error:', e); }
+          } catch(e) {}
           setAppState('dashboard');
         }}
-        onDiagnose={async () => {
-          try {
-            await loadFirebaseScripts();
-            const snap = await firebaseDb.ref(userPath + '/data').get();
-            const data = snap.exists() ? snap.val() : null;
-            const maps = data && data['tapl-blueprint-maps'];
-            const allKeys = data ? Object.keys(data) : [];
-            const mapsCount = maps ? maps.length : 0;
-            alert(
-              'Firebase user path: ' + userPath + '\n\n' +
-              'Keys in Firebase: ' + (allKeys.length ? allKeys.join(', ') : 'NONE') + '\n\n' +
-              'tapl-blueprint-maps: ' + (maps ? mapsCount + ' blueprint(s) found' : 'NOT FOUND') + '\n\n' +
-              (maps && mapsCount > 0 ? 'Blueprint titles: ' + maps.map(m => m.title).join(', ') : '')
-            );
-          } catch(e) {
-            alert('Diagnose error: ' + e.message);
-          }
-        }}
+
       />
     </>
   );
