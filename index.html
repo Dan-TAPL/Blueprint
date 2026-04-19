@@ -2734,7 +2734,7 @@ function MapView({ blueprint, onBack, onUpdateBlueprint }) {
 
 
 // ── Blueprint dashboard ───────────────────────────────────────
-function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore }) {
+function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore, onDiagnose }) {
   return (
     <div className="dashboard-screen">
       <div className="dashboard-heading">Your Blueprints</div>
@@ -2776,6 +2776,21 @@ function Dashboard({ maps, onNew, onOpen, onDelete, onTemplates, onRestore }) {
             onMouseLeave={e => { e.currentTarget.style.color='var(--text-dim)'; e.currentTarget.style.borderColor='var(--text-faint)'; }}
           >
             ↻ Restore from cloud
+          </button>
+        )}
+        {onDiagnose && (
+          <button
+            onClick={onDiagnose}
+            style={{
+              background:'transparent',
+              border:'1px solid var(--accent)',
+              borderRadius:12, padding:'14px 18px',
+              fontFamily:'Montserrat,sans-serif', fontSize:10, fontWeight:700,
+              letterSpacing:'1.5px', textTransform:'uppercase',
+              color:'var(--accent)', cursor:'pointer'
+            }}
+          >
+            ⚑ Diagnose
           </button>
         )}
       </div>
@@ -3071,6 +3086,24 @@ function BlueprintApp({ userEmail, userPath }) {
             setBlueprintMaps(maps);
           } catch(e) { console.error('Restore error:', e); }
           setAppState('dashboard');
+        }}
+        onDiagnose={async () => {
+          try {
+            await loadFirebaseScripts();
+            const snap = await firebaseDb.ref(userPath + '/data').get();
+            const data = snap.exists() ? snap.val() : null;
+            const maps = data && data['tapl-blueprint-maps'];
+            const allKeys = data ? Object.keys(data) : [];
+            const mapsCount = maps ? maps.length : 0;
+            alert(
+              'Firebase user path: ' + userPath + '\n\n' +
+              'Keys in Firebase: ' + (allKeys.length ? allKeys.join(', ') : 'NONE') + '\n\n' +
+              'tapl-blueprint-maps: ' + (maps ? mapsCount + ' blueprint(s) found' : 'NOT FOUND') + '\n\n' +
+              (maps && mapsCount > 0 ? 'Blueprint titles: ' + maps.map(m => m.title).join(', ') : '')
+            );
+          } catch(e) {
+            alert('Diagnose error: ' + e.message);
+          }
         }}
       />
     </>
