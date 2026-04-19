@@ -1318,7 +1318,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
 
   const laid = layoutNodes(nodes, cx, cy, rootOrbit, rootStartAngle, fullSpan, 0, cx, cy);
   let flatNodes = flattenTree(laid);
-  const flatEdges = flattenEdges(laid);
+  // flatEdges built AFTER repulsion so edges connect to actual node positions
 
   // ── Repulsion pass — push overlapping nodes apart ──────────
   // Key rules:
@@ -1397,6 +1397,17 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
 
   // Apply repulsed positions back to flatNodes
   flatNodes = flatNodes.map(n => ({ ...n, x: positions[n.id].x, y: positions[n.id].y }));
+
+  // Build edges now using final repulsed positions
+  // Walk flatNodes — each node with a parentId draws an edge to its parent
+  const flatEdges = [];
+  flatNodes.forEach(n => {
+    if (!n.parentId) return; // root nodes connect to centre — handled separately
+    const parent = flatNodes.find(p => p.id === n.parentId);
+    if (!parent) return;
+    const edgeCol = mixColour(n.colour, n.depth);
+    flatEdges.push({ x1: parent.x, y1: parent.y, x2: n.x, y2: n.y, col: edgeCol, depth: n.depth });
+  });
 
   // Central node radius from title
   function measureTextW(text, fs, fw) { return text.length * fs * (fw >= 800 ? 0.62 : 0.56); }
@@ -2198,7 +2209,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
             const col = parentNode.displayColour || parentNode.colour;
             const fullCol = parentNode.colour;
             const iy = parentNode.y + nodeRadius(parentNode.label, parentNode.depth) + 28;
-            const foHeight = pushStage === 'choice' ? 210 : ['warn-project','warn-folder','warn-tab'].includes(pushStage) ? 160 : pushStage === 'folder-pick' ? 220 : 100;
+            const foHeight = pushStage === 'choice' ? 210 : ['warn-project','warn-folder','warn-tab'].includes(pushStage) ? 160 : pushStage === 'folder-pick' ? 300 : 100;
             return (
               <foreignObject
                 x={parentNode.x - 130} y={iy}
@@ -2335,10 +2346,10 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                           borderRadius:10, padding:'10px 12px', fontFamily:'Montserrat,sans-serif'
                         }}>
                           <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8}}>
-                            <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)'}}>Add to Blueprint tab as</div>
+                            <div style={{fontSize:9, fontWeight:900, letterSpacing:'1.5px', textTransform:'uppercase', color:'var(--text-dim)'}}>Where in Focus Engine?</div>
                             <span onClick={() => setPushStage('choice')} style={{color:'var(--text-faint)', cursor:'pointer', fontSize:11}}>✕</span>
                           </div>
-                          {/* Option 1: Generic Blueprint folder */}
+                          {/* Option 1: Blueprint tab > Blueprint folder */}
                           <div
                             onClick={() => {
                               const fe2 = getFEData();
@@ -2352,17 +2363,17 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                             }}
                             style={{
                               background:'rgba(107,79,187,0.15)', border:'1px solid var(--purple-light)',
-                              borderRadius:8, padding:'8px 10px', cursor:'pointer', marginBottom:6
+                              borderRadius:8, padding:'8px 10px', cursor:'pointer', marginBottom:4
                             }}
                           >
-                            <div style={{fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase', color:'var(--purple-light)'}}>Blueprint folder</div>
-                            <div style={{fontSize:9, color:'var(--text-dim)', marginTop:2}}>Generic folder inside Blueprint tab</div>
+                            <div style={{fontSize:10, fontWeight:900, letterSpacing:'1px', textTransform:'uppercase', color:'var(--purple-light)'}}>Blueprint tab</div>
+                            <div style={{fontSize:9, color:'var(--text-dim)', marginTop:2}}>Add to Blueprint folder inside Blueprint tab</div>
                           </div>
-                          {/* Existing folders */}
+                          {/* Option 2: Existing folders in Blueprint tab */}
                           {tabFolders.length > 0 && (
                             <>
-                              <div style={{fontSize:9, fontWeight:700, color:'var(--text-faint)', letterSpacing:'1px', textTransform:'uppercase', marginBottom:5, marginTop:4}}>Or existing folder</div>
-                              <div style={{maxHeight:90, overflowY:'auto', display:'flex', flexDirection:'column', gap:4}}>
+                              <div style={{fontSize:9, fontWeight:700, color:'var(--text-faint)', letterSpacing:'1px', textTransform:'uppercase', marginBottom:4, marginTop:4}}>Existing folder in Blueprint tab</div>
+                              <div style={{maxHeight:70, overflowY:'auto', display:'flex', flexDirection:'column', gap:3}}>
                                 {tabFolders.map(f => (
                                   <div
                                     key={f.id}
@@ -2372,17 +2383,68 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                                     }}
                                     style={{
                                       background:'rgba(18,15,42,0.97)', border:`1px solid ${f.color || 'var(--border)'}`,
-                                      borderRadius:8, padding:'7px 10px', cursor:'pointer',
+                                      borderRadius:8, padding:'6px 10px', cursor:'pointer',
                                       display:'flex', alignItems:'center', gap:8
                                     }}
                                   >
-                                    <div style={{width:8, height:8, borderRadius:'50%', background: f.color || 'var(--border)', flexShrink:0}}/>
-                                    <span style={{fontSize:11, fontWeight:700, color:'var(--text)', textTransform:'uppercase', letterSpacing:'0.5px'}}>{f.name}</span>
+                                    <div style={{width:7, height:7, borderRadius:'50%', background: f.color || 'var(--border)', flexShrink:0}}/>
+                                    <span style={{fontSize:10, fontWeight:700, color:'var(--text)', textTransform:'uppercase', letterSpacing:'0.5px'}}>{f.name}</span>
                                   </div>
                                 ))}
                               </div>
                             </>
                           )}
+                          {/* Option 3: Other existing tabs */}
+                          {(() => {
+                            const otherTabs = fe.tabs.filter(t => t.id !== pushTargetTabId);
+                            if (!otherTabs.length) return null;
+                            return (
+                              <>
+                                <div style={{fontSize:9, fontWeight:700, color:'var(--text-faint)', letterSpacing:'1px', textTransform:'uppercase', marginBottom:4, marginTop:6}}>Or add to existing tab</div>
+                                <div style={{maxHeight:70, overflowY:'auto', display:'flex', flexDirection:'column', gap:3}}>
+                                  {otherTabs.map(t => (
+                                    <div
+                                      key={t.id}
+                                      onClick={() => {
+                                        const fe2 = getFEData();
+                                        const colour = displayNode ? displayNode.colour : '#6B4FBB';
+                                        if (pendingPushType === 'folder') {
+                                          executePush(pushNodeId, 'folder', null, fe2, t.id);
+                                        } else {
+                                          const bpFolder = fe2.folders.find(f => f.tabId === t.id && f.name === 'Blueprint') ||
+                                            makeFolder('Blueprint', colour, t.id, fe2.folders.length);
+                                          if (!fe2.folders.find(f => f.id === bpFolder.id)) fe2.folders = [...fe2.folders, bpFolder];
+                                          executePush(pushNodeId, pendingPushType, bpFolder.id, fe2, t.id);
+                                        }
+                                      }}
+                                      style={{
+                                        background:'rgba(18,15,42,0.97)', border:`1px solid ${t.color || 'var(--border)'}`,
+                                        borderRadius:8, padding:'6px 10px', cursor:'pointer',
+                                        display:'flex', alignItems:'center', gap:8
+                                      }}
+                                    >
+                                      <div style={{width:7, height:7, borderRadius:'50%', background: t.color || 'var(--border)', flexShrink:0}}/>
+                                      <span style={{fontSize:10, fontWeight:700, color:'var(--text)', textTransform:'uppercase', letterSpacing:'0.5px'}}>{t.name}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </>
+                            );
+                          })()}
+                          {/* Option 4: New dedicated tab */}
+                          <div
+                            onClick={() => {
+                              const fe2 = getFEData();
+                              executePush(pushNodeId, 'tab', null, fe2, null);
+                            }}
+                            style={{
+                              background:'transparent', border:'1px solid var(--border)',
+                              borderRadius:8, padding:'6px 10px', cursor:'pointer', marginTop:6,
+                              display:'flex', alignItems:'center', gap:8
+                            }}
+                          >
+                            <span style={{fontSize:10, fontWeight:700, color:'var(--text-dim)', textTransform:'uppercase', letterSpacing:'0.5px'}}>+ New tab for this domain</span>
+                          </div>
                         </div>
                       );
                     })()
