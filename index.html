@@ -517,6 +517,10 @@ body::after {
   from { opacity: 0; transform: translate(-50%,-50%) scale(0.92); }
   to   { opacity: 1; transform: translate(-50%,-50%) scale(1); }
 }
+@keyframes holdRingFill {
+  from { stroke-dashoffset: var(--ring-circ); }
+  to   { stroke-dashoffset: 0; }
+}
 @keyframes actionFadeIn {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1150,8 +1154,8 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   const [renameRootValue, setRenameRootValue] = React.useState('');
   const [holdTimer, setHoldTimer] = React.useState(null);
   const [holdNodeId, setHoldNodeId] = React.useState(null);
-  const [holdProgress, setHoldProgress] = React.useState(0);
   const holdInterval = React.useRef(null);
+  const holdStartTime = React.useRef(0);
   const pointerDownTime = React.useRef(0);
   const pointerDownNodeId = React.useRef(null);
   const addingToActive = React.useRef(false);
@@ -1247,16 +1251,24 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     const pCx = parentCx !== undefined ? parentCx : cx;
     const pCy = parentCy !== undefined ? parentCy : cy;
     return nodeList.map((node, i) => {
-      const angle = nodeList.length === 1
-        ? startAngle
-        : startAngle + (i / (nodeList.length - 1) - 0.5) * angleSpan;
+      let angle;
+      if (nodeList.length === 1) {
+        angle = startAngle;
+      } else if (depth === 0) {
+        // Root nodes: perfectly even spacing around full circle — no bunching
+        angle = startAngle + (i / nodeList.length) * angleSpan;
+      } else {
+        // Child nodes: fan within span
+        angle = startAngle + (i / (nodeList.length - 1) - 0.5) * angleSpan;
+      }
       const x = cx + Math.cos(angle) * orbitRadius;
       const y = cy + Math.sin(angle) * orbitRadius;
       // childAngle = direction FROM parent centre TOWARD this node (away from origin)
       const childAngle = Math.atan2(y - pCy, x - pCx);
       const childCount = (node.children || []).length;
-      const childRadius = Math.max(60, orbitRadius * 0.68);
-      const childSpan = Math.min(Math.PI * 0.6, Math.PI * 0.18 * Math.max(1, childCount));
+      // Orbit radius scales up with number of children to give them room
+      const childRadius = Math.max(70, orbitRadius * 0.65 + childCount * 8);
+      const childSpan = Math.min(Math.PI * 0.65, Math.PI * 0.2 * Math.max(1, childCount));
       return {
         ...node,
         x, y, angle, depth,
@@ -1298,7 +1310,9 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   const cx = dims.w / 2;
   const cy = dims.h / 2;
   // Larger base orbit so nodes have breathing room before repulsion
-  const rootOrbit = Math.min(dims.w, dims.h) * 0.34;
+  // Scale orbit outward with more domains so they never crowd
+  const baseOrbit = Math.min(dims.w, dims.h) * 0.34;
+  const rootOrbit = Math.max(baseOrbit, nodes.length * 22 + 80);
   const fullSpan = Math.PI * 2;
   const rootStartAngle = nodes.length === 1 ? 0 : -Math.PI / 2;
 
@@ -1419,31 +1433,21 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     pointerDownTime.current = Date.now();
     pointerDownNodeId.current = nodeId;
     setHoldNodeId(nodeId);
-    setHoldProgress(0);
-    let prog = 0;
-    holdInterval.current = setInterval(() => {
-      const elapsed = Date.now() - pointerDownTime.current;
-      prog = Math.min(100, (elapsed / HOLD_MS) * 100);
-      setHoldProgress(prog);
-      if (prog >= 100) {
-        clearInterval(holdInterval.current);
-        holdInterval.current = null;
-        addingToActive.current = true;
-        setHoldNodeId(null);
-        setHoldProgress(0);
-        setAddingTo(nodeId);
-        setNewLabel('');
-      }
-    }, 16);
+    holdInterval.current = setTimeout(() => {
+      holdInterval.current = null;
+      addingToActive.current = true;
+      setHoldNodeId(null);
+      setAddingTo(nodeId);
+      setNewLabel('');
+    }, HOLD_MS);
   }
 
   function cancelHold() {
     if (holdInterval.current) {
-      clearInterval(holdInterval.current);
+      clearTimeout(holdInterval.current);
       holdInterval.current = null;
     }
     setHoldNodeId(null);
-    setHoldProgress(0);
   }
 
   function handleNodePointerDown(e, nodeId) {
@@ -1867,8 +1871,6 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
             const total = countDescendants(n) + (n.depth > 0 ? 1 : 0);
             const done = n.depth > 0 ? (n.done ? 1 : 0) : countDone({...n, children: flatNodes.filter(fn => fn.parentId === n.id).map(fn => ({...fn, children:[]}))});
             const isHolding = holdNodeId === n.id;
-            const holdCircumference = 2 * Math.PI * (R + 4);
-            const holdDash = holdCircumference * (holdProgress / 100);
             const animDelay = animPhase === 1 ? `${n.depth * 0.08 + (flatNodes.indexOf(n) % (nodes.length || 1)) * 0.06}s` : '0s';
 
             const tx = animPhase === 0 ? cx : n.x;
@@ -2018,7 +2020,6 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
           {(() => {
             const rootHolding = holdNodeId === '__root__';
             const rootHoldCirc = 2 * Math.PI * CR;
-            const rootHoldDash = rootHoldCirc * (holdProgress / 100);
             return (
               <g
                 style={{ cursor: 'pointer' }}
@@ -2030,22 +2031,14 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                   // Delay starting the hold animation — taps under 200ms never see the ring
                   rootDelayTimer.current = setTimeout(() => {
                     setHoldNodeId('__root__');
-                    setHoldProgress(0);
-                    holdInterval.current = setInterval(() => {
-                      const elapsed = Date.now() - rootDownTime.current;
-                      const prog = Math.min(100, (elapsed / HOLD_MS) * 100);
-                      setHoldProgress(prog);
-                      if (prog >= 100) {
-                        clearInterval(holdInterval.current);
-                        holdInterval.current = null;
-                        rootHoldFired.current = true;
-                        addingRootActive.current = true;
-                        setHoldNodeId(null);
-                        setHoldProgress(0);
-                        setAddingRoot(true);
-                        setRootLabel('');
-                      }
-                    }, 16);
+                    holdInterval.current = setTimeout(() => {
+                      holdInterval.current = null;
+                      rootHoldFired.current = true;
+                      addingRootActive.current = true;
+                      setHoldNodeId(null);
+                      setAddingRoot(true);
+                      setRootLabel('');
+                    }, HOLD_MS - 200); // subtract the 200ms delay already waited
                   }, 200);
                 }}
                 onPointerUp={e => {
@@ -2054,8 +2047,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                   clearInterval(holdInterval.current);
                   holdInterval.current = null;
                   setHoldNodeId(null);
-                  setHoldProgress(0);
-                  if (addingRootActive.current) return;
+                                    if (addingRootActive.current) return;
                   if (rootHoldFired.current) return;
                   // Short tap — always open Why panel
                   setShowWhy(true);
@@ -2065,8 +2057,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                   clearInterval(holdInterval.current);
                   holdInterval.current = null;
                   setHoldNodeId(null);
-                  setHoldProgress(0);
-                }}
+                                  }}
               >
                 <circle cx={cx} cy={cy} r={CR + 12}
                   fill="none" stroke="var(--purple-light)" strokeWidth="1" opacity="0.15"
@@ -2077,14 +2068,19 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                   opacity="0.95"
                   style={{ opacity: animPhase === 0 ? 0 : 1, transition:'opacity 0.4s ease' }}
                 />
-                {/* Hold progress ring on central node */}
+                {/* Hold progress ring on central node — CSS animated */}
                 {rootHolding && (
                   <circle cx={cx} cy={cy} r={CR + 6}
                     fill="none" stroke="var(--purple-light)" strokeWidth="2.5"
-                    strokeDasharray={`${rootHoldDash} ${rootHoldCirc}`}
+                    strokeDasharray={rootHoldCirc}
+                    strokeDashoffset={rootHoldCirc}
                     strokeLinecap="round"
                     transform={`rotate(-90 ${cx} ${cy})`}
                     opacity="0.9"
+                    style={{
+                      '--ring-circ': rootHoldCirc,
+                      animation: `holdRingFill ${HOLD_MS - 200}ms linear forwards`
+                    }}
                   />
                 )}
                 {tLines.map((ln, li) => (
@@ -2118,8 +2114,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                       clearInterval(holdInterval.current);
                       holdInterval.current = null;
                       setHoldNodeId(null);
-                      setHoldProgress(0);
-                      setRenamingRoot(true);
+                                            setRenamingRoot(true);
                       setRenameRootValue(blueprint.title || '');
                     }}
                     onPointerUp={e => e.stopPropagation()}
