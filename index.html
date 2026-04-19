@@ -1352,8 +1352,6 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
       for (let j = i + 1; j < flatNodes.length; j++) {
         const a = flatNodes[i];
         const b = flatNodes[j];
-        // Skip nodes that belong to the same domain — don't scatter siblings
-        if (domainOf[a.id] === domainOf[b.id]) continue;
         const pa = positions[a.id];
         const pb = positions[b.id];
         const rA = nodeRadius(a.label, a.depth);
@@ -1363,24 +1361,27 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
         const dy = pb.y - pa.y;
         const dist = Math.sqrt(dx * dx + dy * dy) || 0.001;
         if (dist < minDist) {
-          const overlap = (minDist - dist) * DAMPING;
-          // Push direction: radially outward from map centre for each node
-          // This keeps domain clusters together by pushing whole groups apart
-          const axA = pa.x - cx;
-          const ayA = pa.y - cy;
-          const lenA = Math.sqrt(axA*axA + ayA*ayA) || 0.001;
-          const axB = pb.x - cx;
-          const ayB = pb.y - cy;
-          const lenB = Math.sqrt(axB*axB + ayB*ayB) || 0.001;
-          // Blend radial direction with direct separation direction for stability
-          const blend = 0.7;
+          const sameDomain = domainOf[a.id] === domainOf[b.id];
+          const overlap = (minDist - dist) * (sameDomain ? DAMPING * 0.6 : DAMPING);
           const nxAB = dx / dist;
           const nyAB = dy / dist;
-          const rxA = -(axA/lenA * blend + (-nxAB) * (1-blend));
-          const ryA = -(ayA/lenA * blend + (-nyAB) * (1-blend));
-          const rxB =  (axB/lenB * blend + nxAB   * (1-blend));
-          const ryB =  (ayB/lenB * blend + nyAB   * (1-blend));
-          // Depth-0 nodes move less — they anchor their cluster
+          let rxA, ryA, rxB, ryB;
+          if (sameDomain) {
+            // Same domain: push directly apart — keeps siblings spaced without scattering
+            rxA = -nxAB; ryA = -nyAB;
+            rxB =  nxAB; ryB =  nyAB;
+          } else {
+            // Cross domain: push radially from map centre to keep clusters intact
+            const axA = pa.x - cx; const ayA = pa.y - cy;
+            const lenA = Math.sqrt(axA*axA + ayA*ayA) || 0.001;
+            const axB = pb.x - cx; const ayB = pb.y - cy;
+            const lenB = Math.sqrt(axB*axB + ayB*ayB) || 0.001;
+            const blend = 0.7;
+            rxA = -(axA/lenA * blend + (-nxAB) * (1-blend));
+            ryA = -(ayA/lenA * blend + (-nyAB) * (1-blend));
+            rxB =  (axB/lenB * blend + nxAB   * (1-blend));
+            ryB =  (ayB/lenB * blend + nyAB   * (1-blend));
+          }
           const wA = a.depth === 0 ? 0.25 : 0.55;
           const wB = b.depth === 0 ? 0.25 : 0.55;
           pa.x += rxA * overlap * wA;
@@ -1645,7 +1646,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   }
 
   // Called after folder destination is resolved
-  function executePush(nodeId, type, targetFolderId, fe) {
+  function executePush(nodeId, type, targetFolderId, fe, targetTabId) {
     const treeNode = findTreeNode(blueprint.nodes, nodeId);
     const displayNode = flatNodes.find(n => n.id === nodeId);
     if (!treeNode || !displayNode) return;
@@ -1664,7 +1665,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
 
     } else if (type === 'folder') {
       // Creates a new folder inside the target tab
-      const folder = makeFolder(treeNode.label, colour, pushTargetTabId, fe.folders.length);
+      const folder = makeFolder(treeNode.label, colour, targetTabId || null, fe.folders.length);
       fe.folders = [...fe.folders, folder];
       let chunkCount = 0;
       const newItems = [];
@@ -1734,12 +1735,12 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
         // Folder becomes its own folder inside Blueprint tab — no extra folder needed
         setPushTargetTabId(tab.id);
         setPushTargetFolderId(null);
-        executePush(nodeId, 'folder', null, fe2);
+        executePush(nodeId, 'folder', null, fe2, tab.id);
       } else {
         // Task/project — put in Blueprint folder inside Blueprint tab
         const { folder, fe: fe3 } = resolveOrCreateBlueprintFolder(fe2, tab.id, colour);
         setPushTargetTabId(tab.id);
-        executePush(nodeId, type, folder.id, fe3);
+        executePush(nodeId, type, folder.id, fe3, tab.id);
       }
     } else {
       // Blueprint tab exists — show folder picker
@@ -2343,10 +2344,10 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                               const fe2 = getFEData();
                               const colour = displayNode ? displayNode.colour : '#6B4FBB';
                               if (pendingPushType === 'folder') {
-                                executePush(pushNodeId, 'folder', null, fe2);
+                                executePush(pushNodeId, 'folder', null, fe2, pushTargetTabId);
                               } else {
                                 const { folder, fe: fe3 } = resolveOrCreateBlueprintFolder(fe2, pushTargetTabId, colour);
-                                executePush(pushNodeId, pendingPushType, folder.id, fe3);
+                                executePush(pushNodeId, pendingPushType, folder.id, fe3, pushTargetTabId);
                               }
                             }}
                             style={{
@@ -2367,7 +2368,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
                                     key={f.id}
                                     onClick={() => {
                                       const fe2 = getFEData();
-                                      executePush(pushNodeId, pendingPushType, f.id, fe2);
+                                      executePush(pushNodeId, pendingPushType, f.id, fe2, pushTargetTabId);
                                     }}
                                     style={{
                                       background:'rgba(18,15,42,0.97)', border:`1px solid ${f.color || 'var(--border)'}`,
