@@ -586,11 +586,15 @@ const FIREBASE_CONFIG = {
 };
 
 // ── Cloud keys ───────────────────────────────────────────────
+// Blueprint only syncs its own keys — never touches Focus Engine keys on load/save
+// Focus Engine keys are written directly during push actions only
 const CLOUD_KEYS = [
-  'tapl-tasks', 'tapl-blocks', 'tapl-session-start', 'tapl-session-end',
-  'tapl-horizon', 'tapl-hz-folders', 'tapl-hz-tabs', 'tapl-completed-tasks',
-  'tapl-skipped-tasks', 'tapl-theme',
   'tapl-blueprint-maps', 'tapl-blueprint-theme'
+];
+
+// FE keys that Blueprint can WRITE to during push, but never reads on load
+const FE_WRITE_KEYS = [
+  'tapl-horizon', 'tapl-hz-folders', 'tapl-hz-tabs'
 ];
 
 // ── Helpers ──────────────────────────────────────────────────
@@ -1539,11 +1543,22 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     } catch(e) { return { horizon: [], folders: [], tabs: [] }; }
   }
 
-  function saveFEData({ horizon, folders, tabs }) {
+  async function saveFEData({ horizon, folders, tabs }) {
     localStorage.setItem('tapl-horizon',    JSON.stringify(horizon));
     localStorage.setItem('tapl-hz-folders', JSON.stringify(folders));
     localStorage.setItem('tapl-hz-tabs',    JSON.stringify(tabs));
-    window.dispatchEvent(new CustomEvent('tapl-fe-sync'));
+    // Directly sync FE keys to Firebase without touching Blueprint keys
+    try {
+      await loadFirebaseScripts();
+      const userPathVal = window.__taplUserPath;
+      if (userPathVal) {
+        await firebaseDb.ref(userPathVal + '/data').update({
+          'tapl-horizon':    horizon,
+          'tapl-hz-folders': folders,
+          'tapl-hz-tabs':    tabs
+        });
+      }
+    } catch(e) {}
   }
 
   function makeId(prefix) {
@@ -1578,8 +1593,11 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     return 1 + Math.max(...node.children.map(subtreeDepth));
   }
 
-  function makeChunk(label, index) {
-    return { id: `chunk_${Date.now()}_${index}`, name: label, done: false };
+  // Use a module-level counter so chunk IDs are unique even within the same millisecond
+  let _chunkCounter = 0;
+  function makeChunk(label) {
+    _chunkCounter++;
+    return { id: `chunk_${Date.now()}_${_chunkCounter}_${Math.random().toString(36).slice(2,5)}`, name: label, done: false };
   }
 
   function makeHorizonItem(name, type, folderId, chunks) {
@@ -1670,7 +1688,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
 
     } else if (type === 'project') {
       const allDesc = collectDescendants(treeNode, '');
-      const chunks = allDesc.map((l, i) => makeChunk(l, i));
+      const chunks = allDesc.map(l => makeChunk(l));
       fe.horizon = [...fe.horizon, makeHorizonItem(treeNode.label, 'project', targetFolderId, chunks)];
       msg = chunks.length > 0 ? `Project + ${chunks.length} step${chunks.length > 1 ? 's' : ''}` : 'Added as Project';
 
@@ -1681,14 +1699,17 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
       let chunkCount = 0;
       const newItems = [];
       (treeNode.children || []).forEach(child => {
-        const directChunks = (child.children || []).map((gc, i) => makeChunk(gc.label, i));
+        const directChunks = (child.children || []).map(gc => makeChunk(gc.label));
         let extra = [];
         (child.children || []).forEach(gc => {
-          (gc.children || []).forEach((ggc, i) => {
-            extra.push(makeChunk(`${gc.label} › ${ggc.label}`, directChunks.length + extra.length + i));
+          (gc.children || []).forEach(ggc => {
+            extra.push(makeChunk(`${gc.label} › ${ggc.label}`));
           });
         });
-        const allChunks = [...directChunks, ...extra];
+        // If no children, add a placeholder action so the project isn't empty
+        const allChunks = directChunks.length > 0 || extra.length > 0
+          ? [...directChunks, ...extra]
+          : [makeChunk('Complete this action')];
         chunkCount += allChunks.length;
         newItems.push(makeHorizonItem(child.label, 'project', folder.id, allChunks));
       });
@@ -1705,11 +1726,11 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
         fe.folders = [...fe.folders, folder];
         folderCount++;
         (child.children || []).forEach(gc => {
-          const directChunks = (gc.children || []).map((ggc, i) => makeChunk(ggc.label, i));
+          const directChunks = (gc.children || []).map(ggc => makeChunk(ggc.label));
           let extra = [];
           (gc.children || []).forEach(ggc => {
             (ggc.children || []).forEach((d5, i) => {
-              extra.push(makeChunk(`${ggc.label} › ${d5.label}`, directChunks.length + extra.length + i));
+              extra.push(makeChunk(`${ggc.label} › ${d5.label}`));
             });
           });
           const allChunks = [...directChunks, ...extra];
@@ -3143,6 +3164,7 @@ function App() {
     const hash = await hashEmail(email);
     const path = 'users/' + hash;
     window.__taplUserEmail = email;
+    window.__taplUserPath = path;
     localStorage.setItem('tapl-blueprint-email', email);
     setUserEmail(email);
     setUserPath(path);
