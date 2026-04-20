@@ -1562,7 +1562,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   }
 
   function makeId(prefix) {
-    return prefix + Date.now() + (prefix === 'hz_' ? '_' + Math.random().toString(36).slice(2,7) : '');
+    return prefix + Date.now() + '_' + Math.random().toString(36).slice(2,7);
   }
 
   function findTreeNode(nodes, id) {
