@@ -1685,7 +1685,16 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
     const colour = displayNode.colour || '#6B4FBB';
     let msg = '';
     // Temporary debug — remove after confirming tree structure
-    try { window.__bpDebug = { label: treeNode.label, childCount: (treeNode.children||[]).length, children: (treeNode.children||[]).map(c => ({ label: c.label, childCount: (c.children||[]).length })) }; } catch(e) {}
+    try { window.__bpDebug = { 
+      label: treeNode.label, 
+      childCount: (treeNode.children||[]).length, 
+      children: (treeNode.children||[]).map(c => ({ 
+        label: c.label, 
+        id: c.id,
+        childCount: (c.children||[]).length,
+        grandchildren: (c.children||[]).map(gc => gc.label)
+      }))
+    }; } catch(e) {}
 
     if (type === 'task') {
       fe.horizon = [...fe.horizon, makeHorizonItem(treeNode.label, 'task', targetFolderId)];
