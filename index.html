@@ -1147,6 +1147,7 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
   const [pushTargetTabId, setPushTargetTabId] = React.useState(null);
   const [pushTargetFolderId, setPushTargetFolderId] = React.useState(null);
   const [pendingPushType, setPendingPushType] = React.useState(null);
+  const pushInProgress = React.useRef(false);
   const [addingRoot, setAddingRoot] = React.useState(false);
   const [rootLabel, setRootLabel] = React.useState('');
   const [showWhy, setShowWhy] = React.useState(false);
@@ -1676,11 +1677,15 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
 
   // Called after folder destination is resolved
   function executePush(nodeId, type, targetFolderId, fe, targetTabId) {
+    if (pushInProgress.current) return; // prevent double-execution
+    pushInProgress.current = true;
     const treeNode = findTreeNode(blueprint.nodes, nodeId);
     const displayNode = flatNodes.find(n => n.id === nodeId);
-    if (!treeNode || !displayNode) return;
+    if (!treeNode || !displayNode) { pushInProgress.current = false; return; }
     const colour = displayNode.colour || '#6B4FBB';
     let msg = '';
+    // Temporary debug — remove after confirming tree structure
+    try { window.__bpDebug = { label: treeNode.label, childCount: (treeNode.children||[]).length, children: (treeNode.children||[]).map(c => ({ label: c.label, childCount: (c.children||[]).length })) }; } catch(e) {}
 
     if (type === 'task') {
       fe.horizon = [...fe.horizon, makeHorizonItem(treeNode.label, 'task', targetFolderId)];
@@ -1733,7 +1738,9 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
               extra.push(makeChunk(`${ggc.label} › ${d5.label}`));
             });
           });
-          const allChunks = [...directChunks, ...extra];
+          const allChunks = directChunks.length > 0 || extra.length > 0
+            ? [...directChunks, ...extra]
+            : [makeChunk('Complete this action')];
           chunkCount += allChunks.length;
           fe.horizon = [...fe.horizon, makeHorizonItem(gc.label, 'project', folder.id, allChunks)];
           projectCount++;
@@ -1744,7 +1751,11 @@ function BlueprintCanvas({ blueprint, onUpdateBlueprint }) {
 
     saveFEData(fe);
     setPushFeedback(msg);
-    setTimeout(() => { setPushFeedback(null); setPushStage(null); setPushNodeId(null); setPushTargetTabId(null); setPushTargetFolderId(null); setPendingPushType(null); }, 2500);
+    setTimeout(() => {
+      setPushFeedback(null); setPushStage(null); setPushNodeId(null);
+      setPushTargetTabId(null); setPushTargetFolderId(null); setPendingPushType(null);
+      pushInProgress.current = false;
+    }, 2500);
   }
 
   function pushAsType(nodeId, type) {
